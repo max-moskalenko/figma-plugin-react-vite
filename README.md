@@ -7,10 +7,12 @@ A Figma plugin that extracts the complete DOM structure of selected components, 
 - **Complete Component Extraction**: Extracts full DOM structure with hierarchical node relationships
 - **Variable Detection**: Automatically detects and uses Figma variables for colors, spacing, typography, borders, and more
 - **Component Set Support**: Extracts all variants when a COMPONENT_SET is selected
-- **Inline Styles**: Generates clean HTML with inline styles for easy integration
-- **CSS Custom Properties**: Creates CSS variables for all detected Figma variables
+- **Dual Output Formats**: 
+  - **CSS Format**: Generates clean HTML with inline styles and CSS custom properties
+  - **Tailwind Format**: Generates HTML with Tailwind utility classes (see [CSS to Tailwind Remapping](#css-to-tailwind-remapping))
 - **Zero-Value Filtering**: Automatically filters out useless properties (e.g., `border-radius: 0px`, `padding: 0px`)
 - **Text Content Extraction**: Preserves text content from TEXT nodes with proper font loading
+- **Intelligent Class Mapping**: Converts Figma design tokens to semantic Tailwind classes (e.g., `spacing-7` → `p-7`, `gap-7`)
 
 ## How It Works
 
@@ -53,8 +55,8 @@ flowchart TD
 2. **Tree Traversal**: Recursively traverses the node tree to build a hierarchical structure
 3. **Style Extraction**: Extracts all style properties (fills, strokes, effects, typography, layout) with variable resolution
 4. **Font Loading**: Loads fonts asynchronously for TEXT nodes before accessing text content
-5. **CSS Generation**: Converts extracted styles to CSS, creating custom properties for variables
-6. **HTML Generation**: Generates HTML with inline styles and data attributes
+5. **Style Conversion**: Converts extracted styles to CSS properties or Tailwind classes based on selected format
+6. **HTML Generation**: Generates HTML with inline styles (CSS format) or className attributes (Tailwind format)
 
 ## What It Extracts
 
@@ -139,25 +141,13 @@ The plugin generates a `:root` block with all CSS variables:
 
 ## Output Format
 
-### HTML Structure
+The plugin supports two output formats:
 
-The output is clean HTML with:
+### CSS Format (Default)
 
-- **Inline styles**: All styles applied directly to elements via `style` attribute
-- **Data attributes**: `data-name` (first) and `data-type` for each element
-- **Proper formatting**: Multi-line attributes with consistent indentation
-- **Self-closing tags**: For elements without children
-
-Example output:
+Generates HTML with inline styles and CSS custom properties:
 
 ```html
-<style>
-  :root {
-    --spacing-4: 16px;
-    --color-primary: #0066ff;
-  }
-</style>
-
 <div
   data-name="Button"
   data-type="component"
@@ -172,6 +162,29 @@ Example output:
   </p>
 </div>
 ```
+
+**Features**:
+- Inline styles with CSS custom property references
+- CSS variables defined in `:root` block (when using variables)
+- Zero-value properties automatically filtered out
+
+### Tailwind Format
+
+Generates HTML with Tailwind utility classes:
+
+```html
+<div className="button-root flex flex-row p-4 bg-fill-primary">
+  <p className="label-root text-base text-white">
+    Click me
+  </p>
+</div>
+```
+
+**Features**:
+- Tailwind utility classes (e.g., `p-4`, `bg-fill-primary`, `text-base`)
+- Semantic class mapping from Figma variables (e.g., `spacing-7` → `p-7`)
+- CSS variable definitions for Tailwind config integration
+- See [CSS to Tailwind Remapping](#css-to-tailwind-remapping) for detailed conversion rules
 
 ### Filtered Properties
 
@@ -219,6 +232,74 @@ The copy button:
 - Uses the modern Clipboard API when available
 - Falls back to `document.execCommand('copy')` for compatibility
 - Shows "Copied" feedback for 2 seconds after successful copy
+
+## CSS to Tailwind Remapping
+
+The plugin intelligently converts CSS properties and Figma variables to Tailwind utility classes. This conversion process involves:
+
+1. **Variable Name Parsing**: Extracts semantic values from Figma variable names
+2. **Scale Value Extraction**: Maps spacing/typography variables to Tailwind scale values
+3. **Class Generation**: Converts values to appropriate Tailwind utility classes
+4. **Fallback Handling**: Uses arbitrary values when no direct Tailwind class exists
+
+### Key Remapping Examples
+
+#### Spacing Properties
+- `spacing-7` variable → `p-7`, `gap-7`, `w-7`, `h-7`
+- `spacing-0-5` variable → `p-0.5`, `gap-0.5`
+- `spacing-px` variable → `p-px`, `gap-px`
+
+#### Typography
+- `font-size-lg` variable → `text-lg`
+- `font-weight-bold` variable → `font-bold`
+- `font-leading-4` variable → `leading-4`
+- `font-sans` variable → `font-sans`
+
+#### Colors
+- `fill/neutral/default` variable → `bg-fill-neutral-default` (or `text-fill-neutral-default` for text nodes)
+- `border-width-2` variable → `border-2`
+- `radius-lg` variable → `rounded-lg`
+
+#### Layout
+- `layoutGrow === 1` → `flex-1`
+- `layoutSizingHorizontal === "FILL"` → `w-full`
+- `layoutMode === "HORIZONTAL"` → `flex flex-row`
+
+### Complete Remapping Documentation
+
+For a comprehensive guide to all CSS-to-Tailwind remapping rules, see **[CSS_TO_TAILWIND_MAPPING.md](./CSS_TO_TAILWIND_MAPPING.md)**. This document covers:
+
+- All property-specific remapping logic
+- Variable extraction patterns
+- Fallback strategies
+- Special cases and edge cases
+- Implementation details
+
+### Variable Map for Tailwind Config
+
+When using Tailwind format, the plugin generates CSS variable definitions that can be added to your Tailwind configuration:
+
+```javascript
+// tailwind.config.js
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        'fill-neutral-default': 'var(--fill-neutral-default)',
+        'fill-primary': 'var(--fill-primary)',
+      }
+    }
+  }
+}
+```
+
+```css
+/* global.css */
+:root {
+  --fill-neutral-default: #0066ff;
+  --fill-primary: #ff0000;
+}
+```
 
 ## Technical Details
 
@@ -274,20 +355,44 @@ The plugin checks these property names when resolving variables:
 
 ```
 src/
-├── common/              # Shared code between plugin and UI
-│   ├── cssGenerator.ts  # CSS generation with variable support
-│   ├── domGenerator.ts  # HTML generation with inline styles
-│   └── networkSides.ts  # Communication channel definitions
-├── plugin/              # Plugin-side code (runs in Figma)
+├── common/                    # Shared code between plugin and UI
+│   ├── cssGenerator.ts        # CSS generation with variable support
+│   ├── tailwindGenerator.ts   # Tailwind class generation with remapping logic
+│   ├── domGenerator.ts        # HTML generation with inline styles (CSS format)
+│   ├── tailwindDomGenerator.ts # HTML generation with Tailwind classes
+│   └── networkSides.ts        # Communication channel definitions
+├── plugin/                    # Plugin-side code (runs in Figma)
 │   ├── extractors/
 │   │   ├── componentTraverser.ts  # Node tree traversal
-│   │   └── styleExtractor.ts      # Style extraction with variables
-│   ├── plugin.network.ts           # Message handlers
-│   └── plugin.ts                  # Plugin entry point
-└── ui/                  # UI-side code (React app)
-    ├── app.tsx          # Main UI component
-    └── app.network.tsx  # UI communication setup
+│   │   └── styleExtractor.ts      # Style extraction with variable resolution
+│   ├── plugin.network.ts       # Message handlers and extraction orchestration
+│   └── plugin.ts              # Plugin entry point
+└── ui/                        # UI-side code (React app)
+    ├── app.tsx                # Main UI component with format toggle
+    └── app.network.tsx        # UI communication setup
 ```
+
+### Key Files
+
+- **`src/common/tailwindGenerator.ts`**: Core CSS-to-Tailwind remapping logic
+  - Property-specific conversion functions (spacing, typography, colors, layout, etc.)
+  - Variable name parsing and value extraction
+  - Tailwind class generation with fallback handling
+
+- **`src/common/cssGenerator.ts`**: CSS property generation
+  - Converts extracted styles to CSS properties
+  - Generates CSS custom property references
+  - Used for CSS format output
+
+- **`src/plugin/extractors/styleExtractor.ts`**: Style extraction with variable resolution
+  - Extracts all style properties from Figma nodes
+  - Resolves Figma variable bindings
+  - Handles special cases (array bindings, per-corner properties, etc.)
+
+- **`src/plugin/plugin.network.ts`**: Main extraction handler
+  - Orchestrates the extraction pipeline
+  - Handles COMPONENT_SET nodes
+  - Coordinates style extraction and DOM generation
 
 ### Build Commands
 

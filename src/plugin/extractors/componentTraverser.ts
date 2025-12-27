@@ -37,7 +37,30 @@ function extractAnnotations(node: SceneNode): string[] {
 }
 
 /**
- * Recursively traverse a Figma node and build a tree structure
+ * Recursively traverses a Figma node and builds a tree structure.
+ * 
+ * This function creates a hierarchical representation of the Figma component structure,
+ * preserving parent-child relationships and node metadata. It does NOT extract styles
+ * (that's done separately in the extraction pipeline).
+ * 
+ * TRAVERSAL PROCESS:
+ * 1. Creates ExtractedNode with id, name, type, and annotations
+ * 2. Recursively processes all children nodes
+ * 3. Preserves the exact tree structure from Figma
+ * 4. Extracts annotations (comments/notes) from nodes
+ * 
+ * NODE METADATA:
+ * - id: Unique Figma node ID
+ * - name: Node name from Figma
+ * - type: Node type (FRAME, TEXT, COMPONENT, etc.)
+ * - annotations: Array of annotation strings (comments attached to nodes)
+ * - children: Array of child ExtractedNode objects (recursive structure)
+ * 
+ * NOTE: Styles are NOT extracted here. The styles property is populated later
+ * by the style extraction process in plugin.network.ts.
+ * 
+ * @param node - The Figma SceneNode to traverse
+ * @returns ExtractedNode object representing this node and its children
  */
 export function traverseComponent(node: SceneNode): ExtractedNode {
   const extracted: ExtractedNode = {
@@ -56,7 +79,18 @@ export function traverseComponent(node: SceneNode): ExtractedNode {
 }
 
 /**
- * Traverse multiple selected nodes
+ * Traverses multiple selected Figma nodes and builds tree structures for each.
+ * 
+ * This is the entry point for component extraction. It processes each selected node
+ * independently, creating separate tree structures for each.
+ * 
+ * USE CASE:
+ * When a user selects multiple components or a COMPONENT_SET, this function creates
+ * a tree structure for each component variant, which are then processed separately
+ * in the extraction pipeline.
+ * 
+ * @param selection - Array of selected Figma SceneNodes
+ * @returns Array of ExtractedNode objects, one for each selected node
  */
 export function traverseSelection(selection: readonly SceneNode[]): ExtractedNode[] {
   return selection.map((node) => traverseComponent(node));

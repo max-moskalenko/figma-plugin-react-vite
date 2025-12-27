@@ -1,12 +1,40 @@
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, layoutToCSS, typographyToCSS, fillsToCSS, strokesToCSS, effectsToCSS, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
+import { AnnotationFormat } from "@common/networkSides";
 
 export interface GeneratedDOM {
   html: string;
   css: string;
   stylesheet: string;
   usedVariables: string[]; // List of unique variable names used
+}
+
+/**
+ * Formats an annotation string based on the specified format.
+ * 
+ * @param annotation - The annotation text to format
+ * @param format - The annotation format: "html", "tsx", or "none"
+ * @param indent - The indentation string
+ * @returns Formatted annotation string or empty string if format is "none"
+ */
+function formatAnnotation(annotation: string, format: AnnotationFormat, indent: string): string {
+  if (format === "none") {
+    return "";
+  }
+  
+  // Escape special characters
+  const escapedAnnotation = annotation
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  
+  if (format === "tsx") {
+    return `${indent}{/* ${escapedAnnotation} */}\n`;
+  }
+  
+  // Default to HTML format
+  return `${indent}<!-- ${escapedAnnotation} -->\n`;
 }
 
 /**
@@ -107,20 +135,19 @@ function propertiesToInlineStyle(properties: string[]): string {
 /**
  * Generates HTML attributes for a node, with data-name as the first attribute.
  * 
- * Formats attributes for readability, with each attribute on a new line.
- * Long style attributes are broken into multiple lines for better readability.
- * 
  * @param nodeName - The Figma node name (used for data-name attribute)
  * @param nodeType - The Figma node type (used for data-type attribute)
  * @param inlineStyle - The inline style string to include
  * @param indent - Indentation level for formatting
- * @returns Formatted attributes string with proper indentation
+ * @param prettify - Whether to format with newlines or keep compact
+ * @returns Formatted attributes string
  */
 function generateAttributes(
   nodeName: string,
   nodeType: string,
   inlineStyle: string,
-  indent: number
+  indent: number,
+  prettify: boolean
 ): string {
   const indentStr = "  ".repeat(indent);
   const attrs: string[] = [];
@@ -131,11 +158,10 @@ function generateAttributes(
   // data-type second
   attrs.push(`data-type="${nodeType.toLowerCase()}"`);
   
-  // style last - format it nicely if it's long
+  // style last
   if (inlineStyle) {
     const escapedStyle = inlineStyle.replace(/"/g, "&quot;");
-    // If style is long, break it into multiple lines
-    if (escapedStyle.length > 60) {
+    if (prettify && escapedStyle.length > 60) {
       // Split by semicolon and format each property on a new line
       const styleProps = escapedStyle.split("; ").filter(p => p.trim());
       const formattedStyle = styleProps
@@ -147,8 +173,13 @@ function generateAttributes(
     }
   }
 
-  // Always use multi-line format for better readability
-  return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+  if (prettify) {
+    // Multi-line format for readability
+    return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+  } else {
+    // Compact single-line format
+    return ` ${attrs.join(" ")}`;
+  }
 }
 
 /**
@@ -159,16 +190,21 @@ function generateAttributes(
  * 
  * @param node - The extracted node with optional styles
  * @param variableMap - Map of variable names to CSS values (populated during generation)
+ * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
+ * @param prettify - Whether to format with indentation or keep compact
  * @param indent - Current indentation level for formatting (default: 0)
  * @returns HTML string for this node and its children
  */
 function generateHTMLRecursive(
   node: ExtractedNode & { styles?: ExtractedStyles },
   variableMap: VariableMap,
+  annotationFormat: AnnotationFormat,
+  prettify: boolean,
   indent: number = 0
 ): string {
   try {
-    const indentStr = "  ".repeat(indent);
+    const indentStr = prettify ? "  ".repeat(indent) : "";
+    const newline = prettify ? "\n" : "";
     let inlineStyle = "";
 
     // Generate inline styles if styles exist
@@ -195,24 +231,21 @@ function generateHTMLRecursive(
       }
     }
 
-    // Add annotations as HTML comments before the element
+    // Add annotations before the element (format depends on annotationFormat)
     let html = "";
     if (node.annotations && node.annotations.length > 0) {
       node.annotations.forEach((annotation) => {
-        // Escape HTML in annotation text and format as comment
-        const escapedAnnotation = annotation
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        html += `${indentStr}<!-- ${escapedAnnotation} -->\n`;
+        html += formatAnnotation(annotation, annotationFormat, indentStr);
       });
     }
 
     const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
-    const attributes = generateAttributes(node.name, node.type, inlineStyle, indent);
+    const attributes = generateAttributes(node.name, node.type, inlineStyle, indent, prettify);
 
-    // Always use multi-line format for attributes
-    const openingTag = `${indentStr}<${element}${attributes}\n${indentStr}`;
+    // Build opening tag
+    const openingTag = prettify 
+      ? `${indentStr}<${element}${attributes}${newline}${indentStr}`
+      : `${indentStr}<${element}${attributes}`;
     html += openingTag;
 
     // Check if element has children or text content
@@ -228,23 +261,25 @@ function generateHTMLRecursive(
         html += escapeHTML(textContent);
       }
 
-      // Add children with proper indentation
+      // Add children
       if (hasChildren && node.children) {
-        if (!hasText) {
-          html += "\n";
+        if (prettify && !hasText) {
+          html += newline;
         }
         node.children.forEach((child, i) => {
           try {
-            if (hasText && i === 0) {
-              html += "\n";
+            if (prettify && hasText && i === 0) {
+              html += newline;
             }
             html += generateHTMLRecursive(
               child as ExtractedNode & { styles?: ExtractedStyles },
               variableMap,
+              annotationFormat,
+              prettify,
               indent + 1
             );
-            if (node.children && i < node.children.length - 1) {
-              html += "\n";
+            if (prettify && node.children && i < node.children.length - 1) {
+              html += newline;
             }
           } catch (childError) {
             console.warn("Error generating HTML for child", { 
@@ -255,12 +290,14 @@ function generateHTMLRecursive(
             });
           }
         });
-        html += `\n${indentStr}`;
+        if (prettify) {
+          html += `${newline}${indentStr}`;
+        }
       }
       
       html += `</${element}>`;
     } else {
-      html += ` />`;
+      html += prettify ? ` />` : `/>`;
     }
 
     return html;
@@ -304,10 +341,14 @@ function escapeHTML(text: string): string {
  * styles (e.g., `var(--variable-name)`). Zero-value properties are filtered out.
  * 
  * @param nodes - Array of extracted nodes with styles
+ * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
+ * @param prettify - Whether to format with indentation (true) or keep compact (false)
  * @returns GeneratedDOM object with html, css (variables block), and stylesheet (combined output)
  */
 export function generateDOM(
-  nodes: (ExtractedNode & { styles?: ExtractedStyles })[]
+  nodes: (ExtractedNode & { styles?: ExtractedStyles })[],
+  annotationFormat: AnnotationFormat = "html",
+  prettify: boolean = true
 ): GeneratedDOM {
   const variableMap: VariableMap = {};
 
@@ -326,7 +367,7 @@ export function generateDOM(
   // Generate HTML for all nodes with inline styles
   const htmlParts = nodes.map((node, index) => {
     try {
-      const html = generateHTMLRecursive(node, variableMap, 0);
+      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0);
       return html;
     } catch (error) {
       console.error("Error generating HTML for node", { 
@@ -339,7 +380,7 @@ export function generateDOM(
     }
   });
 
-  const html = htmlParts.join("\n\n");
+  const html = htmlParts.join(prettify ? "\n\n" : "");
   
   // Final output: HTML with inline styles only (no style block)
   const stylesheet = html;

@@ -1,8 +1,9 @@
-import { PLUGIN, UI } from "@common/networkSides";
+import { PLUGIN, UI, AnnotationFormat } from "@common/networkSides";
 import { traverseSelection } from "@plugin/extractors/componentTraverser";
 import { extractStyles, getAllVariables } from "@plugin/extractors/styleExtractor";
 import { generateDOM } from "@common/domGenerator";
 import { generateTailwindDOM } from "@common/tailwindDomGenerator";
+import { generateRawJSON } from "@common/rawJsonGenerator";
 
 export const PLUGIN_CHANNEL = PLUGIN.channelBuilder()
   .emitsTo(UI, (message) => {
@@ -26,20 +27,118 @@ PLUGIN_CHANNEL.registerMessageHandler("hello", (text) => {
 });
 
 /**
- * Gets the name of the currently selected node(s) in Figma.
+ * Determines the type label for a Figma node.
+ */
+function getNodeTypeLabel(node: SceneNode): string {
+  // Check for component-related types first
+  if (node.type === "COMPONENT_SET") {
+    return "Component Set";
+  }
+  
+  if (node.type === "COMPONENT") {
+    // Check if it's a variant (has a parent that is a COMPONENT_SET)
+    if (node.parent && node.parent.type === "COMPONENT_SET") {
+      return "Variant";
+    }
+    return "Component";
+  }
+  
+  if (node.type === "INSTANCE") {
+    return "Instance";
+  }
+  
+  // Frame types
+  if (node.type === "FRAME") {
+    return "Frame";
+  }
+  
+  if (node.type === "GROUP") {
+    return "Group";
+  }
+  
+  // Shape types
+  if (node.type === "RECTANGLE") {
+    return "Rectangle";
+  }
+  
+  if (node.type === "ELLIPSE") {
+    return "Ellipse";
+  }
+  
+  if (node.type === "POLYGON") {
+    return "Polygon";
+  }
+  
+  if (node.type === "STAR") {
+    return "Star";
+  }
+  
+  if (node.type === "LINE") {
+    return "Line";
+  }
+  
+  if (node.type === "VECTOR") {
+    return "Vector";
+  }
+  
+  // Text
+  if (node.type === "TEXT") {
+    return "Text";
+  }
+  
+  // Boolean operations
+  if (node.type === "BOOLEAN_OPERATION") {
+    return "Boolean";
+  }
+  
+  // Section
+  if (node.type === "SECTION") {
+    return "Section";
+  }
+  
+  // Slice
+  if (node.type === "SLICE") {
+    return "Slice";
+  }
+  
+  // Fallback to the raw type
+  return node.type.charAt(0) + node.type.slice(1).toLowerCase().replace(/_/g, " ");
+}
+
+/**
+ * Gets the name and type of the currently selected node(s) in Figma.
  * Used to update the UI when selection changes.
  * 
- * @returns The name of the first selected node, or "No selection" if nothing is selected
+ * @returns Object with name and type of the first selected node
  */
 PLUGIN_CHANNEL.registerMessageHandler("getSelectionName", async () => {
   const selectedNodes = figma.currentPage.selection;
   
   if (selectedNodes.length === 0) {
-    return "No selection";
+    return { name: "No selection", type: "" };
   }
   
-  // Return the name of the first selected node
-  return selectedNodes[0].name || "Unnamed";
+  const node = selectedNodes[0];
+  return {
+    name: node.name || "Unnamed",
+    type: getNodeTypeLabel(node)
+  };
+});
+
+/**
+ * Resizes the plugin window
+ */
+PLUGIN_CHANNEL.registerMessageHandler("resizeWindow", (width, height) => {
+  // Clamp to min/max bounds
+  const minWidth = 600;
+  const maxWidth = 1400;
+  const minHeight = 400;
+  const maxHeight = 900;
+  
+  const clampedWidth = Math.max(minWidth, Math.min(maxWidth, width));
+  const clampedHeight = Math.max(minHeight, Math.min(maxHeight, height));
+  
+  figma.ui.resize(clampedWidth, clampedHeight);
 });
 
 PLUGIN_CHANNEL.registerMessageHandler("createRect", (width, height) => {
@@ -87,12 +186,13 @@ PLUGIN_CHANNEL.registerMessageHandler("exportSelection", async () => {
  * 1. Handles COMPONENT_SET nodes by extracting all component variants
  * 2. Traverses nodes to build tree structure
  * 3. Recursively extracts styles (with variable resolution) and text content
- * 4. Generates HTML with inline styles and CSS variables (CSS format) or Tailwind classes (Tailwind format)
+ * 4. Generates all three output formats at once: CSS, Tailwind, and Raw JSON
  * 
- * @param format - Output format: "css" (default) for inline styles, "tailwind" for utility classes
- * @returns Object with html, css (variables block), stylesheet (combined), componentName, and variableMappings
+ * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
+ * @param prettify - Whether to prettify the output (true) or use compact format (false)
+ * @returns Object with css, tailwind, and raw outputs, plus componentName and variableMappings
  */
-PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (format: "css" | "tailwind" = "css") => {
+PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationFormat: AnnotationFormat = "html", prettify: boolean = true) => {
   const selectedNodes = figma.currentPage.selection;
   
   if (selectedNodes.length === 0) {
@@ -197,17 +297,30 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (format: "css" |
       }
     }
 
-    // Step 5: Generate DOM from extracted nodes with styles
-    // This creates HTML with inline styles and CSS variables (CSS format) or Tailwind classes (Tailwind format)
-    let dom;
+    // Step 5: Generate all three output formats from extracted nodes with styles
+    // CSS: HTML with inline styles using CSS variables
+    // Tailwind: HTML with Tailwind utility classes
+    // Raw: JSON representation of the extracted node structure
+    let cssDom;
+    let tailwindDom;
+    let rawJson;
+    
     try {
-      if (format === "tailwind") {
-        dom = generateTailwindDOM(extractedNodes);
-      } else {
-        dom = generateDOM(extractedNodes);
-      }
+      cssDom = generateDOM(extractedNodes, annotationFormat, prettify);
     } catch (domError) {
-      throw new Error(`Failed to generate DOM: ${domError instanceof Error ? domError.message : "Unknown error"}`);
+      throw new Error(`Failed to generate CSS DOM: ${domError instanceof Error ? domError.message : "Unknown error"}`);
+    }
+    
+    try {
+      tailwindDom = generateTailwindDOM(extractedNodes, annotationFormat, prettify);
+    } catch (domError) {
+      throw new Error(`Failed to generate Tailwind DOM: ${domError instanceof Error ? domError.message : "Unknown error"}`);
+    }
+    
+    try {
+      rawJson = generateRawJSON(extractedNodes, prettify);
+    } catch (jsonError) {
+      throw new Error(`Failed to generate Raw JSON: ${jsonError instanceof Error ? jsonError.message : "Unknown error"}`);
     }
     
     // Get component name from first selected node (use original selection for naming)
@@ -235,13 +348,36 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (format: "css" |
       });
     });
 
+    // Combine all used variables from all formats (deduplicated)
+    const allUsedVariables = [...new Set([
+      ...cssDom.usedVariables,
+      ...tailwindDom.usedVariables,
+      ...rawJson.usedVariables,
+    ])].sort();
+
     const result = {
-      html: dom.html,
-      css: dom.css,
-      stylesheet: dom.stylesheet,
+      // CSS format output
+      css: {
+        html: cssDom.html,
+        stylesheet: cssDom.stylesheet,
+        usedVariables: cssDom.usedVariables,
+      },
+      // Tailwind format output
+      tailwind: {
+        html: tailwindDom.html,
+        stylesheet: tailwindDom.stylesheet,
+        usedVariables: tailwindDom.usedVariables,
+      },
+      // Raw JSON format output
+      raw: {
+        json: rawJson.json,
+        stylesheet: rawJson.stylesheet,
+        usedVariables: rawJson.usedVariables,
+      },
+      // Shared metadata
       componentName: componentName,
       variableMappings: variableMappings.length > 0 ? variableMappings : undefined,
-      usedVariables: dom.usedVariables.length > 0 ? dom.usedVariables : undefined,
+      usedVariables: allUsedVariables.length > 0 ? allUsedVariables : undefined,
     };
     
     return result;

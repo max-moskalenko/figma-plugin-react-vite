@@ -88,12 +88,28 @@ export function generateClassName(nodeName: string, nodeType: string, index: num
 /**
  * Converts fill (background) properties to CSS background-color or background properties.
  * 
- * If a fill has a variable binding, generates a CSS custom property reference and stores
- * the resolved value in the variableMap. Otherwise, uses the raw color value.
+ * CSS GENERATION LOGIC:
+ * 1. With Variable:
+ *    - Converts Figma variable name to CSS custom property (e.g., "fill/neutral/default" → "--fill-neutral-default")
+ *    - Generates: background-color: var(--fill-neutral-default)
+ *    - Stores resolved color value in variableMap for :root block generation
+ *    - Handles opacity: if opacity < 1, stores as rgba() in variableMap
  * 
- * @param fills - Array of extracted fill objects
+ * 2. Without Variable:
+ *    - Solid colors: background-color: #{hex}
+ *    - Colors with opacity: background-color: rgba(r, g, b, opacity)
+ * 
+ * 3. Gradients:
+ *    - Linear gradients: background: linear-gradient(...)
+ *    - Radial gradients: background: radial-gradient(...)
+ *    - Gradient stops converted from RGB (0-1) to hex format
+ * 
+ * NOTE: This function generates CSS properties, not Tailwind classes.
+ * For Tailwind output, see fillsToTailwind() in tailwindGenerator.ts
+ * 
+ * @param fills - Array of extracted fill objects with type, color, opacity, and optional variable
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of CSS property strings (e.g., ["background-color: var(--color-primary)"])
+ * @returns Array of CSS property strings (e.g., ["background-color: var(--fill-neutral-default)"])
  */
 export function fillsToCSS(fills: any, variableMap: VariableMap): string[] {
   if (!fills || fills.length === 0) return [];
@@ -357,7 +373,8 @@ export function typographyToCSS(typography: any, variableMap: VariableMap): stri
     }
   }
 
-  if (typography.letterSpacing) {
+  // Check for letterSpacing OR letterSpacingVariable (value can be 0 but still have a variable)
+  if (typography.letterSpacing || typography.letterSpacingVariable) {
     if (typography.letterSpacingVariable) {
       const cssVarName = figmaVariableToCSSVariable(typography.letterSpacingVariable);
       // Store the value - handle both number and object formats
@@ -406,13 +423,54 @@ export function typographyToCSS(typography: any, variableMap: VariableMap): stri
 /**
  * Converts layout properties to CSS layout properties.
  * 
- * Handles width, height, padding, gap (itemSpacing), border radius, and opacity variables.
- * For padding, uses individual properties when variables are present, otherwise uses shorthand.
- * For border radius, supports both uniform and per-corner values.
+ * CSS GENERATION LOGIC:
+ * 
+ * 1. Layout Sizing & Flex:
+ *    - layoutGrow === 1 → flex: 1 (fills available space)
+ *    - layoutSizingHorizontal === "FILL" → flex-grow: 1 or width: 100%
+ *    - layoutSizingVertical === "FILL" → height: 100%
+ *    - layoutSizing === "HUG" → no property (natural sizing)
+ * 
+ * 2. Width/Height:
+ *    - With Variable: width: var(--width-variable) or height: var(--height-variable)
+ *    - Without Variable: width: {value}px or height: {value}px
+ *    - Only set if NOT filling AND NOT hugging that dimension
+ * 
+ * 3. Flex Direction:
+ *    - layoutMode exists → display: flex
+ *    - layoutMode === "HORIZONTAL" → flex-direction: row
+ *    - layoutMode === "VERTICAL" → flex-direction: column
+ * 
+ * 4. Padding:
+ *    - With Variables: Individual properties (padding-top, padding-right, etc.) with var() references
+ *    - Without Variables: Shorthand padding: {top}px {right}px {bottom}px {left}px
+ *    - Zero padding filtered out
+ * 
+ * 5. Gap:
+ *    - With Variable: gap: var(--itemSpacing-variable)
+ *    - Without Variable: gap: {value}px
+ *    - Skipped when using SPACE_BETWEEN alignment
+ * 
+ * 6. Alignment:
+ *    - Primary/Counter axis alignment converted to justify-content or align-items
+ *    - Values: min → start, center → center, max → end, space-between → space-between
+ * 
+ * 7. Border Radius:
+ *    - With Variable: border-radius: var(--radius-variable)
+ *    - Without Variable: border-radius: {value}px
+ *    - Per-corner: border-radius: {tl}px {tr}px {br}px {bl}px
+ * 
+ * 8. Opacity:
+ *    - With Variable: opacity: var(--opacity-variable)
+ *    - Without Variable: opacity: {value}
+ *    - Only generated when opacity < 1
+ * 
+ * NOTE: This function generates CSS properties, not Tailwind classes.
+ * For Tailwind output, see layoutToTailwind() in tailwindGenerator.ts
  * 
  * @param layout - Extracted layout object with properties and variable names
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of CSS property strings (e.g., ["width: var(--width-lg)", "padding: 16px"])
+ * @returns Array of CSS property strings (e.g., ["display: flex", "width: var(--width-lg)", "padding: 16px"])
  */
 export function layoutToCSS(layout: any, variableMap: VariableMap): string[] {
   if (!layout) return [];

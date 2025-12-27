@@ -1,6 +1,7 @@
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
+import { AnnotationFormat } from "@common/networkSides";
 import {
   layoutToTailwind,
   typographyToTailwind,
@@ -15,6 +16,26 @@ export interface GeneratedTailwindDOM {
   css: string;
   stylesheet: string;
   usedVariables: string[]; // List of unique variable names used
+}
+
+/**
+ * Formats an annotation string based on the specified format.
+ */
+function formatAnnotation(annotation: string, format: AnnotationFormat, indent: string): string {
+  if (format === "none") {
+    return "";
+  }
+  
+  const escapedAnnotation = annotation
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  
+  if (format === "tsx") {
+    return `${indent}{/* ${escapedAnnotation} */}\n`;
+  }
+  
+  return `${indent}<!-- ${escapedAnnotation} -->\n`;
 }
 
 /**
@@ -67,7 +88,8 @@ function generateAttributes(
   nodeName: string,
   nodeType: string,
   tailwindClasses: string[],
-  indent: number
+  indent: number,
+  prettify: boolean
 ): string {
   const indentStr = "  ".repeat(indent);
   const attrs: string[] = [];
@@ -81,7 +103,11 @@ function generateAttributes(
     attrs.push(`className="${classValue}"`);
   }
 
-  return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+  if (prettify) {
+    return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+  } else {
+    return attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
+  }
 }
 
 /**
@@ -90,10 +116,13 @@ function generateAttributes(
 function generateHTMLRecursive(
   node: ExtractedNode & { styles?: ExtractedStyles },
   variableMap: VariableMap,
+  annotationFormat: AnnotationFormat,
+  prettify: boolean,
   indent: number = 0
 ): string {
   try {
-    const indentStr = "  ".repeat(indent);
+    const indentStr = prettify ? "  ".repeat(indent) : "";
+    const newline = prettify ? "\n" : "";
     let tailwindClasses: string[] = [];
 
     // Check if this node has absolutely positioned children - if so, add relative class
@@ -114,11 +143,14 @@ function generateHTMLRecursive(
         classes.push(...layoutToTailwind(node.styles.layout, variableMap, node.styles.positioning));
         classes.push(...typographyToTailwind(node.styles.typography, variableMap));
         
-        // For text nodes, fills represent text color, not background
+        // SPECIAL CASE: Text node color handling
+        // In Figma, TEXT nodes use "fills" for text color, not background color.
+        // We need to convert bg-* classes to text-* classes for text nodes.
+        // Example: bg-fill-neutral-default → text-fill-neutral-default
         if (node.type === "TEXT" && node.styles.fills) {
           // Convert fills to text color classes for text nodes
           const fillClasses = fillsToTailwind(node.styles.fills, variableMap);
-          // Replace bg- with text- for text color
+          // Replace bg- prefix with text- prefix for text color
           const textColorClasses = fillClasses.map(cls => {
             if (cls.startsWith("bg-")) {
               return cls.replace("bg-", "text-");
@@ -127,7 +159,7 @@ function generateHTMLRecursive(
           });
           classes.push(...textColorClasses);
         } else {
-          // For non-text nodes, fills are background
+          // For non-text nodes, fills are background colors
           classes.push(...fillsToTailwind(node.styles.fills, variableMap));
         }
         
@@ -148,23 +180,20 @@ function generateHTMLRecursive(
       }
     }
 
-    // Add annotations as HTML comments before the element
+    // Add annotations before the element (format depends on annotationFormat)
     let html = "";
     if (node.annotations && node.annotations.length > 0) {
       node.annotations.forEach((annotation) => {
-        // Escape HTML in annotation text and format as comment
-        const escapedAnnotation = annotation
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
-        html += `${indentStr}<!-- ${escapedAnnotation} -->\n`;
+        html += formatAnnotation(annotation, annotationFormat, indentStr);
       });
     }
 
     const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
-    const attributes = generateAttributes(node.name, node.type, tailwindClasses, indent);
+    const attributes = generateAttributes(node.name, node.type, tailwindClasses, indent, prettify);
 
-    const openingTag = `${indentStr}<${element}${attributes}\n${indentStr}`;
+    const openingTag = prettify
+      ? `${indentStr}<${element}${attributes}${newline}${indentStr}`
+      : `${indentStr}<${element}${attributes}`;
     html += openingTag;
 
     const hasChildren = node.children && node.children.length > 0;
@@ -179,21 +208,23 @@ function generateHTMLRecursive(
       }
 
       if (hasChildren && node.children) {
-        if (!hasText) {
-          html += "\n";
+        if (prettify && !hasText) {
+          html += newline;
         }
         node.children.forEach((child, i) => {
           try {
-            if (hasText && i === 0) {
-              html += "\n";
+            if (prettify && hasText && i === 0) {
+              html += newline;
             }
             html += generateHTMLRecursive(
               child as ExtractedNode & { styles?: ExtractedStyles },
               variableMap,
+              annotationFormat,
+              prettify,
               indent + 1
             );
-            if (node.children && i < node.children.length - 1) {
-              html += "\n";
+            if (prettify && node.children && i < node.children.length - 1) {
+              html += newline;
             }
           } catch (childError) {
             console.warn("Error generating HTML for child", { 
@@ -204,12 +235,14 @@ function generateHTMLRecursive(
             });
           }
         });
-        html += `\n${indentStr}`;
+        if (prettify) {
+          html += `${newline}${indentStr}`;
+        }
       }
       
       html += `</${element}>`;
     } else {
-      html += ` />`;
+      html += prettify ? ` />` : `/>`;
     }
 
     return html;
@@ -295,7 +328,9 @@ function generateTailwindConfig(variableMap: VariableMap): string {
  * Generates complete DOM structure from extracted nodes with Tailwind classes.
  */
 export function generateTailwindDOM(
-  nodes: (ExtractedNode & { styles?: ExtractedStyles })[]
+  nodes: (ExtractedNode & { styles?: ExtractedStyles })[],
+  annotationFormat: AnnotationFormat = "html",
+  prettify: boolean = true
 ): GeneratedTailwindDOM {
   const variableMap: VariableMap = {};
 
@@ -313,7 +348,7 @@ export function generateTailwindDOM(
   // Generate HTML for all nodes with Tailwind classes
   const htmlParts = nodes.map((node, index) => {
     try {
-      const html = generateHTMLRecursive(node, variableMap, 0);
+      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0);
       return html;
     } catch (error) {
       console.error("Error generating HTML for node", { 
@@ -326,7 +361,7 @@ export function generateTailwindDOM(
     }
   });
 
-  const html = htmlParts.join("\n\n");
+  const html = htmlParts.join(prettify ? "\n\n" : "");
   
   // Output only HTML, no config header
   const stylesheet = html;

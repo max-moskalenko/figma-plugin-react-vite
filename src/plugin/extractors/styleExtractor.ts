@@ -20,9 +20,27 @@ export interface VariableInfo {
 /**
  * Resolves a Figma variable binding for a node property, or returns the raw value if no variable is bound.
  * 
- * Figma's boundVariables API uses different property names than the node properties themselves.
- * For example, border radius uses `topLeftRadius`, `topRightRadius`, etc. instead of `cornerRadius`.
- * Typography properties are often stored as arrays in boundVariables.
+ * VARIABLE RESOLUTION PROCESS:
+ * 1. Checks node.boundVariables[property] for variable binding
+ * 2. Handles array-based bindings (common for typography properties)
+ * 3. Extracts variable ID from VariableAlias object
+ * 4. Looks up variable in variable collections
+ * 5. Resolves value for the current mode (defaults to first mode)
+ * 6. Returns VariableInfo with name and resolved value, or raw value if not bound
+ * 
+ * PROPERTY NAME MAPPING:
+ * Figma uses different property names in boundVariables than node properties:
+ * - cornerRadius → topLeftRadius, topRightRadius, bottomLeftRadius, bottomRightRadius
+ * - strokeWeight → strokeTopWeight, strokeBottomWeight, strokeLeftWeight, strokeRightWeight
+ * - fontSize, lineHeight, etc. → stored as arrays in boundVariables
+ * 
+ * ARRAY HANDLING:
+ * Typography properties are often stored as arrays: [{ id: "VariableID:...", type: "VariableAlias" }]
+ * This function extracts the first element from these arrays.
+ * 
+ * MODE RESOLUTION:
+ * Variables can have different values per mode (e.g., light/dark themes).
+ * This function uses the first mode from the variable collection as the default.
  * 
  * @param node - The Figma node to check for variable bindings
  * @param property - The property name to check in boundVariables (may differ from node property name)
@@ -691,9 +709,35 @@ function extractPositioning(node: SceneNode): any {
  * This is the main entry point for style extraction. It coordinates all the individual
  * extractor functions and returns a complete ExtractedStyles object.
  * 
+ * EXTRACTION PROCESS:
+ * 1. Fills: Background colors, gradients, images (with variable resolution)
+ * 2. Strokes: Border colors, widths, styles (with variable resolution)
+ * 3. Effects: Shadows, blurs (no variables supported)
+ * 4. Typography: Font properties, text styling (with variable resolution)
+ * 5. Layout: Dimensions, padding, gap, flex properties, border radius, opacity (with variable resolution)
+ * 6. Positioning: X, Y coordinates, rotation
+ * 7. Visibility: Visible/hidden state
+ * 
+ * VARIABLE RESOLUTION:
+ * All extractor functions check for Figma variable bindings and resolve them using
+ * the provided variable collections. If no variable is bound, raw values are used.
+ * 
+ * ERROR HANDLING:
+ * Individual extractor functions handle errors gracefully, returning null or default
+ * values when extraction fails. This ensures partial extraction is possible even if
+ * some properties cannot be extracted.
+ * 
  * @param node - The Figma node to extract styles from
  * @param variables - All variable collections for resolving variable values
- * @returns ExtractedStyles object containing all extracted style information
+ * @returns ExtractedStyles object containing all extracted style information:
+ *   - fills: Array of fill objects with colors, gradients, or images
+ *   - strokes: Object with stroke colors, width, style, and alignment
+ *   - effects: Array of shadow and blur effects
+ *   - typography: Object with font properties and text styling
+ *   - layout: Object with dimensions, spacing, flex, and layout properties
+ *   - positioning: Object with x, y coordinates and rotation
+ *   - opacity: Opacity value (0-1)
+ *   - visible: Visibility flag (true/false)
  */
 export function extractStyles(
   node: SceneNode,

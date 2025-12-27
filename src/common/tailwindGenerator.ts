@@ -21,26 +21,51 @@ export function figmaVariableToTailwindClass(figmaName: string): string {
 
 /**
  * Extracts the Tailwind scale value from a spacing variable name.
- * Examples: "spacing-7" → "7", "spacing-1" → "1", "spacing-0-5" → "0.5"
+ * 
+ * This function parses Figma variable names to extract numeric or semantic values
+ * that can be used directly in Tailwind utility classes. It handles various
+ * naming conventions used in design systems.
+ * 
+ * REMAPPING EXAMPLES:
+ * - "spacing-7" → "7" → generates classes like "p-7", "gap-7", "w-7", "h-7"
+ * - "spacing-1" → "1" → generates classes like "p-1", "gap-1"
+ * - "spacing-0-5" → "0.5" → generates classes like "p-0.5", "gap-0.5"
+ * - "spacing-px" → "px" → generates classes like "p-px", "gap-px" (1px in Tailwind)
+ * - "spacing/7" → "7" (normalized from slash to hyphen)
+ * 
+ * PATTERN MATCHING:
+ * 1. Special case: "spacing-px" → returns "px" (Tailwind's 1px value)
+ * 2. Hyphen format: "spacing-0-5" → matches "spacing-(\d+)-(\d+)" → converts to "0.5"
+ * 3. Dot format: "spacing-0.5" → matches "spacing-([\d.]+)" → returns "0.5"
+ * 4. Integer format: "spacing-7" → matches "spacing-([\d.]+)" → returns "7"
  * 
  * @param variableName - The variable name (e.g., "spacing-7", "spacing/7", "spacing-0-5")
- * @returns The scale value (e.g., "7", "1", "0.5") or null if not a spacing variable
+ * @returns The scale value (e.g., "7", "1", "0.5", "px") or null if not a spacing variable
  */
 function extractSpacingValue(variableName: string): string | null {
+  // Normalize: convert slashes to hyphens for consistent matching
   const normalized = variableName.toLowerCase().replace(/\//g, "-");
+  
   // Handle special case: "spacing-px" -> "px" (1px in Tailwind)
   if (normalized === "spacing-px") {
     return "px";
   }
-  // Handle both "spacing-0-5" (hyphen) and "spacing-0.5" (dot) formats
+  
+  // Match two patterns:
+  // 1. Hyphen format: "spacing-0-5" (matches "spacing-(\d+)-(\d+)")
+  // 2. Dot or integer format: "spacing-0.5" or "spacing-7" (matches "spacing-([\d.]+)")
   const match = normalized.match(/^spacing-(\d+)-(\d+)$/) || normalized.match(/^spacing-([\d.]+)$/);
+  
   if (match) {
     // If it's the hyphen format like "0-5", convert to "0.5"
     if (match[2]) {
       return `${match[1]}.${match[2]}`;
     }
+    // Otherwise return the matched value (integer or decimal)
     return match[1];
   }
+  
+  // Not a spacing variable
   return null;
 }
 
@@ -138,9 +163,28 @@ function rgbToHex(r: number, g: number, b: number): string {
 /**
  * Converts fill (background) properties to Tailwind background classes.
  * 
- * @param fills - Array of extracted fill objects
+ * REMAPPING LOGIC:
+ * 1. With Variable:
+ *    - Converts Figma variable name to Tailwind class name (e.g., "fill/neutral/default" → "fill-neutral-default")
+ *    - Generates class: bg-{variableName} (e.g., "bg-fill-neutral-default")
+ *    - Stores resolved color value in variableMap for Tailwind config
+ *    - Handles opacity: if opacity < 1, stores as rgba() in variableMap
+ * 
+ * 2. Without Variable:
+ *    - Uses Tailwind arbitrary values: bg-[#{hex}] for solid colors
+ *    - For colors with opacity: bg-[rgba(r,g,b,opacity)]
+ * 
+ * 3. Gradients:
+ *    - Linear gradients: bg-[linear-gradient(...)]
+ *    - Radial gradients: bg-[radial-gradient(...)]
+ *    - Gradient stops converted from RGB (0-1) to hex format
+ * 
+ * NOTE: For TEXT nodes, this function generates background classes, but they are
+ * converted to text color classes (text-*) in tailwindDomGenerator.ts
+ * 
+ * @param fills - Array of extracted fill objects with type, color, opacity, and optional variable
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of Tailwind class strings (e.g., ["bg-fill-neutral-default"])
+ * @returns Array of Tailwind class strings (e.g., ["bg-fill-neutral-default", "bg-[#ff0000]"])
  */
 export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] {
   if (!fills || fills.length === 0) return [];
@@ -204,9 +248,37 @@ export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] 
 /**
  * Converts stroke (border) properties to Tailwind border classes.
  * 
- * @param strokes - Extracted stroke object with strokes array, strokeWeight, and variable info
+ * REMAPPING LOGIC:
+ * 1. Border Color:
+ *    - With Variable: border-{variableName} (e.g., "border-fill-neutral-default")
+ *    - Without Variable: border-[#{hex}] or border-[rgba(r,g,b,opacity)]
+ *    - Stores color value in variableMap for CSS variable definition
+ * 
+ * 2. Border Width:
+ *    - With Variable: Extracts scale value from variable name (e.g., "border-width-1" → "1")
+ *      → Generates: border-{value} (e.g., "border-1")
+ *    - Without Variable: Maps common values:
+ *      - 1px → border-1
+ *      - 2px → border-2
+ *      - 3px → border-3
+ *      - 4px → border-4
+ *      - 8px → border-8
+ *      - Others → border-[{value}px]
+ * 
+ * 3. Border Style:
+ *    - Determined by strokeDashArray:
+ *      - Equal small values (≤2px) → border-dotted
+ *      - Other dash patterns → border-dashed
+ *      - No dash array → solid (default, no class needed)
+ * 
+ * @param strokes - Extracted stroke object containing:
+ *   - strokes: Array of stroke paint objects with color, opacity, and optional variable
+ *   - strokeWeight: Border width in pixels
+ *   - strokeWeightVariable: Optional variable name for stroke weight
+ *   - strokeAlign: Border alignment (CENTER, INSIDE, OUTSIDE)
+ *   - strokeDashArray: Optional array for dashed/dotted borders
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of Tailwind class strings (e.g., ["border-fill-neutral-default", "border"])
+ * @returns Array of Tailwind class strings (e.g., ["border-fill-neutral-default", "border-2", "border-dashed"])
  */
 export function strokesToTailwind(strokes: any, variableMap: VariableMap): string[] {
   if (!strokes || !strokes.strokes || strokes.strokes.length === 0) return [];
@@ -292,9 +364,59 @@ export function strokesToTailwind(strokes: any, variableMap: VariableMap): strin
 /**
  * Converts typography properties to Tailwind typography classes.
  * 
- * @param typography - Extracted typography object with properties and variable names
+ * REMAPPING LOGIC BY PROPERTY:
+ * 
+ * 1. Font Family:
+ *    - With Variable: Extracts value from variable name (e.g., "font-sans" → "sans")
+ *      → Generates: font-{value} (e.g., "font-sans")
+ *    - Without Variable: Detects font family type:
+ *      - Contains "sans" → font-sans
+ *      - Contains "serif" → font-serif
+ *      - Contains "mono" → font-mono
+ *      - Others → font-['{fontName}'] (arbitrary value)
+ * 
+ * 2. Font Size:
+ *    - With Variable: Extracts size value (e.g., "font-size-lg" → "lg")
+ *      → Generates: text-{value} (e.g., "text-lg")
+ *    - Without Variable: Maps common sizes:
+ *      - 12px → text-xs, 14px → text-sm, 16px → text-base
+ *      - 18px → text-lg, 20px → text-xl, 24px → text-2xl
+ *      - 30px → text-3xl, 36px → text-4xl, 48px → text-5xl, 60px → text-6xl
+ *      - Others → text-[{size}px]
+ * 
+ * 3. Font Weight:
+ *    - With Variable: Extracts weight value (e.g., "font-weight-bold" → "bold")
+ *      → Generates: font-{value} (e.g., "font-bold")
+ *    - Without Variable: Maps weight names:
+ *      - thin → font-thin, extralight → font-extralight, light → font-light
+ *      - regular → font-normal, medium → font-medium, semibold → font-semibold
+ *      - bold → font-bold, extrabold → font-extrabold, black → font-black
+ * 
+ * 4. Line Height:
+ *    - With Variable: Extracts leading value (e.g., "font-leading-4" → "4")
+ *      → Generates: leading-{value} (e.g., "leading-4")
+ *    - Without Variable: Maps common values:
+ *      - 1 → leading-none, 1.25 → leading-tight, 1.5 → leading-snug
+ *      - 1.75 → leading-normal, 2 → leading-relaxed, 2.25 → leading-loose
+ *      - Others → leading-[{value}] (supports px and %)
+ * 
+ * 5. Letter Spacing:
+ *    - With Variable: tracking-[var(--{variableName})]
+ *    - Without Variable: tracking-[{value}px] or tracking-[{value}%]
+ * 
+ * 6. Text Decoration: underline, line-through, overline
+ * 7. Text Case: UPPER → uppercase, LOWER → lowercase, TITLE → capitalize
+ * 8. Text Alignment: LEFT → text-left, CENTER → text-center, RIGHT → text-right, JUSTIFIED → text-justify
+ * 
+ * @param typography - Extracted typography object with:
+ *   - fontSize, fontSizeVariable
+ *   - fontFamily, fontFamilyVariable
+ *   - fontWeight, fontWeightVariable
+ *   - lineHeight, lineHeightVariable (can be number or object with value/unit)
+ *   - letterSpacing, letterSpacingVariable (can be number or object with value/unit)
+ *   - textDecoration, textCase, textAlignHorizontal
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of Tailwind class strings (e.g., ["text-foreground-neutral", "text-lg", "font-bold"])
+ * @returns Array of Tailwind class strings (e.g., ["text-lg", "font-bold", "leading-4", "text-center"])
  */
 export function typographyToTailwind(typography: any, variableMap: VariableMap): string[] {
   if (!typography) return [];
@@ -425,7 +547,8 @@ export function typographyToTailwind(typography: any, variableMap: VariableMap):
     }
   }
 
-  if (typography.letterSpacing) {
+  // Check for letterSpacing OR letterSpacingVariable (value can be 0 but still have a variable)
+  if (typography.letterSpacing || typography.letterSpacingVariable) {
     if (typography.letterSpacingVariable) {
       const tailwindVarName = figmaVariableToTailwindClass(typography.letterSpacingVariable);
       const value = typeof typography.letterSpacing === "object" && "unit" in typography.letterSpacing
@@ -474,10 +597,76 @@ export function typographyToTailwind(typography: any, variableMap: VariableMap):
 /**
  * Converts layout properties to Tailwind layout classes.
  * 
- * @param layout - Extracted layout object with properties and variable names
+ * REMAPPING LOGIC BY PROPERTY:
+ * 
+ * 1. Positioning:
+ *    - layoutPositioning === "ABSOLUTE" → absolute
+ *    - Parent with absolute children → relative (handled in tailwindDomGenerator)
+ * 
+ * 2. Layout Sizing & Flex Grow:
+ *    - layoutGrow === 1 → flex-1 (fills available space in flex direction)
+ *    - layoutSizingHorizontal === "FILL" → w-full
+ *    - layoutSizingVertical === "FILL" → h-full
+ *    - layoutSizingHorizontal === "HUG" → no width class (natural sizing)
+ *    - layoutSizingVertical === "HUG" → no height class (natural sizing)
+ *    - Priority: layoutGrow takes precedence over layoutSizing
+ * 
+ * 3. Width/Height:
+ *    - With Variable: Extracts spacing value → w-{value} or h-{value}
+ *    - Without Variable:
+ *      - 100% → w-full or h-full
+ *      - auto → w-auto or h-auto
+ *      - Others → w-[{value}px] or h-[{value}px]
+ *    - Only set if NOT filling AND NOT hugging that dimension
+ * 
+ * 4. Flex Direction:
+ *    - layoutMode exists → flex
+ *    - layoutMode === "HORIZONTAL" → flex-row
+ *    - layoutMode === "VERTICAL" → flex-col
+ * 
+ * 5. Padding:
+ *    - With Variables: Individual side classes (pt-{value}, pr-{value}, pb-{value}, pl-{value})
+ *    - Without Variables:
+ *      - All sides equal → p-{value} (e.g., p-4 for 16px)
+ *      - Different values → p-[{top}px_{right}px_{bottom}px_{left}px]
+ *    - Zero padding filtered out
+ * 
+ * 6. Gap:
+ *    - With Variable: gap-{value} (extracted from spacing variable)
+ *    - Without Variable: gap-1 (4px), gap-2 (8px), gap-3 (12px), gap-4 (16px), etc.
+ *    - Skipped when using SPACE_BETWEEN alignment (handled by justify-between)
+ * 
+ * 7. Alignment:
+ *    - Primary Axis (HORIZONTAL): MIN → justify-start, CENTER → justify-center, MAX → justify-end
+ *    - Primary Axis (VERTICAL): MIN → items-start, CENTER → items-center, MAX → items-end
+ *    - Counter Axis: Similar mapping based on layout direction
+ *    - SPACE_BETWEEN → justify-between, SPACE_AROUND → justify-around
+ *    - STRETCH → items-stretch
+ * 
+ * 8. Border Radius:
+ *    - With Variable: Extracts radius value → rounded-{value} (e.g., "radius-lg" → "rounded-lg")
+ *    - Without Variable:
+ *      - 4px → rounded, 8px → rounded-lg, 12px → rounded-xl, 16px → rounded-2xl
+ *      - Others → rounded-[{value}px]
+ *    - Per-corner: rounded-[{tl}px_{tr}px_{br}px_{bl}px]
+ * 
+ * 9. Opacity:
+ *    - With Variable: opacity-[var(--{variableName})]
+ *    - Without Variable: opacity-10 (0.1), opacity-20 (0.2), ..., opacity-90 (0.9)
+ *    - Only generated when opacity < 1
+ * 
+ * @param layout - Extracted layout object with:
+ *   - width, height, widthVariable, heightVariable
+ *   - layoutGrow, layoutSizingHorizontal, layoutSizingVertical
+ *   - layoutMode, layoutPositioning
+ *   - paddingTop/Right/Bottom/Left, padding*Variable
+ *   - itemSpacing, itemSpacingVariable
+ *   - primaryAxisAlignItems, counterAxisAlignItems
+ *   - cornerRadius, cornerRadiusVariable
+ *   - opacity, opacityVariable
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @param positioning - Optional positioning object with x, y coordinates
- * @returns Array of Tailwind class strings (e.g., ["flex", "w-full", "p-4", "gap-2"])
+ * @param positioning - Optional positioning object (currently unused, kept for compatibility)
+ * @returns Array of Tailwind class strings (e.g., ["flex", "flex-row", "w-full", "p-4", "gap-2", "justify-center"])
  */
 export function layoutToTailwind(layout: any, variableMap: VariableMap, positioning?: any): string[] {
   if (!layout) return [];
@@ -495,21 +684,27 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
   // layoutSizingHorizontal === "FILL" means fill width
   // layoutSizingVertical === "FILL" means fill height
   
-  // Determine if element should fill or hug based on layoutGrow OR layoutSizing properties
-  // layoutSizingHorizontal === "FILL" means fill width (use w-full)
-  // layoutSizingHorizontal === "HUG" means hug content (skip width, let it be auto)
-  // layoutSizingHorizontal === "FIXED" means fixed width (set explicit width)
-  // Same logic applies to layoutSizingVertical for height
-  // layoutGrow === 1 means fill in the primary axis direction (use flex-1)
+  // LAYOUT SIZING LOGIC:
+  // Figma has three layout sizing modes: FILL, HUG, and FIXED
+  // - FILL: Element fills available space (use w-full or h-full)
+  // - HUG: Element sizes to content (no width/height class needed, natural sizing)
+  // - FIXED: Element has explicit dimensions (use w-[value] or h-[value])
+  // 
+  // layoutGrow === 1 means the element should grow to fill available space in the flex direction
+  // This takes precedence over layoutSizing properties
+  // 
+  // PRIORITY: layoutGrow > layoutSizingHorizontal/layoutSizingVertical
   const shouldFillWidth = layout.layoutGrow === 1 || layout.layoutSizingHorizontal === "FILL";
   const shouldFillHeight = layout.layoutGrow === 1 || layout.layoutSizingVertical === "FILL";
   const shouldHugWidth = layout.layoutSizingHorizontal === "HUG";
   const shouldHugHeight = layout.layoutSizingVertical === "HUG";
   
   // Handle layoutGrow === 1: use flex-1 (fills in flex direction)
+  // flex-1 is equivalent to flex: 1 1 0%, which makes the element grow to fill available space
   if (layout.layoutGrow === 1) {
     classes.push("flex-1");
     // Skip width/height when using flex-1 to fill available space
+    // The flex-1 class handles sizing automatically
   } else {
     // Handle layoutSizing: use w-full or h-full for specific dimension fills
     if (layout.layoutSizingHorizontal === "FILL") {
@@ -684,14 +879,20 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
       }
     }
 
-    // Gap - skip if SPACE_BETWEEN alignment is used (it handles spacing automatically)
-    // Always store the variable if it exists, even if we skip the gap class
+    // GAP HANDLING:
+    // Gap (itemSpacing) creates space between flex children.
+    // However, when using SPACE_BETWEEN alignment, justify-between handles spacing automatically,
+    // so we skip the gap class to avoid double spacing.
+    // 
+    // Always store the variable if it exists (for consistency with CSS output),
+    // even if we skip the gap class.
     if (layout.itemSpacingVariable) {
       // Always store the variable value in variableMap (for consistency with CSS)
       variableMap[layout.itemSpacingVariable] = `${layout.itemSpacing}px`;
     }
     
     // Only add gap class if not using SPACE_BETWEEN alignment
+    // SPACE_BETWEEN uses justify-between which handles spacing automatically
     if (layout.itemSpacing !== undefined && 
         layout.primaryAxisAlignItems !== "SPACE_BETWEEN" && 
         layout.counterAxisAlignItems !== "SPACE_BETWEEN") {
@@ -825,10 +1026,33 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
 }
 
 /**
- * Converts visual effects to Tailwind classes.
+ * Converts visual effects (shadows and blurs) to Tailwind classes.
  * 
- * @param effects - Array of extracted effect objects
- * @returns Array of Tailwind class strings (e.g., ["shadow-lg", "blur-sm"])
+ * REMAPPING LOGIC:
+ * 
+ * 1. Shadows (DROP_SHADOW, INNER_SHADOW):
+ *    - Converts shadow properties to CSS shadow definition
+ *    - Format: {inset}{x}px {y}px {radius}px rgba(r,g,b,opacity)
+ *    - Uses arbitrary value: shadow-[{shadowDefinition}]
+ *    - Multiple shadows combined: shadow-[shadow1, shadow2, ...]
+ *    - Inner shadows include "inset " prefix
+ * 
+ * 2. Blurs (LAYER_BLUR, BACKGROUND_BLUR):
+ *    - Maps blur radius to Tailwind blur classes:
+ *      - 4px → blur-sm
+ *      - 8px → blur
+ *      - 12px → blur-md
+ *      - 16px → blur-lg
+ *      - 24px → blur-xl
+ *      - Others → blur-[{radius}px]
+ * 
+ * NOTE: Effects don't support Figma variables, so all values are direct conversions.
+ * 
+ * @param effects - Array of extracted effect objects with:
+ *   - type: "DROP_SHADOW" | "INNER_SHADOW" | "LAYER_BLUR" | "BACKGROUND_BLUR"
+ *   - For shadows: color (hex), opacity, offset (x, y), radius, spread
+ *   - For blurs: radius
+ * @returns Array of Tailwind class strings (e.g., ["shadow-[0_2px_4px_rgba(0,0,0,0.1)]", "blur-sm"])
  */
 export function effectsToTailwind(effects: any): string[] {
   if (!effects || effects.length === 0) return [];
@@ -875,10 +1099,33 @@ export function effectsToTailwind(effects: any): string[] {
 /**
  * Generates Tailwind classes from extracted styles.
  * 
- * @param className - The CSS class name (not used for Tailwind, but kept for compatibility)
- * @param styles - Extracted styles object
+ * This is the main entry point for converting Figma styles to Tailwind utility classes.
+ * It coordinates all the individual property converters and returns a complete
+ * set of Tailwind classes for an element.
+ * 
+ * CLASS GENERATION ORDER:
+ * 1. Layout (display, flex, width, height, padding, gap, alignment, positioning)
+ * 2. Typography (font family, size, weight, line height, letter spacing, decoration, case, alignment)
+ * 3. Colors (background/fills, text color for text nodes)
+ * 4. Borders (border color, width, style, radius)
+ * 5. Effects (shadows, blurs)
+ * 6. Visibility (hidden)
+ * 
+ * This order ensures proper CSS cascade and class readability.
+ * 
+ * @param className - The CSS class name (not used for Tailwind, but kept for compatibility with CSS generator)
+ * @param styles - Extracted styles object containing:
+ *   - layout: Layout properties (width, height, padding, gap, flex, alignment, etc.)
+ *   - typography: Typography properties (font family, size, weight, line height, etc.)
+ *   - fills: Background/fill properties (colors, gradients)
+ *   - strokes: Border properties (color, width, style)
+ *   - effects: Visual effects (shadows, blurs)
+ *   - visible: Visibility flag
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns TailwindClass object with classes array
+ *   Variables are stored here for generating Tailwind config and CSS variable definitions
+ * @returns TailwindClass object with:
+ *   - classes: Array of Tailwind utility class strings
+ *   - variableComments: Array of comment strings (currently unused, kept for compatibility)
  */
 export function generateTailwindClasses(
   className: string,
