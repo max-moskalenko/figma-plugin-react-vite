@@ -153,8 +153,15 @@ Converts Figma variable names to Tailwind-friendly class names by:
 
 #### Letter Spacing
 
+**Extraction Function**: `extractLetterSpacingValue(variableName: string)`
+
+**Pattern Matching**:
+- `"font-tracking-normal"` → extracts `"normal"` → generates `tracking-normal`
+- `"font-tracking-tight"` → extracts `"tight"` → generates `tracking-tight`
+- `"font-tracking-wide"` → extracts `"wide"` → generates `tracking-wide`
+
 **Remapping Logic**:
-- **With Variable**: `tracking-[var(--{variableName})]` (arbitrary value with CSS variable)
+- **With Variable**: `tracking-{value}` (e.g., `tracking-normal`, `tracking-tight`, `tracking-wide`)
 - **Without Variable**: `tracking-[{value}px]` or `tracking-[{value}%]`
 
 #### Text Decoration

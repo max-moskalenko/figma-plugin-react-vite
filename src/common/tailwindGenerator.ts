@@ -122,6 +122,19 @@ function extractLineHeightValue(variableName: string): string | null {
 }
 
 /**
+ * Extracts the Tailwind value from a letter-spacing (tracking) variable name.
+ * Examples: "font-tracking-normal" → "normal", "font-tracking-tight" → "tight"
+ * 
+ * @param variableName - The variable name (e.g., "font-tracking-normal", "font-tracking/tight")
+ * @returns The tracking value (e.g., "normal", "tight", "tighter", "wide", "wider", "widest") or null if not a tracking variable
+ */
+function extractLetterSpacingValue(variableName: string): string | null {
+  const normalized = variableName.toLowerCase().replace(/\//g, "-");
+  const match = normalized.match(/^font-tracking-(.+)$/);
+  return match ? match[1] : null;
+}
+
+/**
  * Extracts the Tailwind value from a radius variable name.
  * Examples: "radius-full" → "full", "radius-lg" → "lg", "radius-2xl" → "2xl"
  * 
@@ -401,7 +414,8 @@ export function strokesToTailwind(strokes: any, variableMap: VariableMap): strin
  *      - Others → leading-[{value}] (supports px and %)
  * 
  * 5. Letter Spacing:
- *    - With Variable: tracking-[var(--{variableName})]
+ *    - With Variable: Extracts tracking value (e.g., "font-tracking-normal" → "normal")
+ *      → Generates: tracking-{value} (e.g., "tracking-normal")
  *    - Without Variable: tracking-[{value}px] or tracking-[{value}%]
  * 
  * 6. Text Decoration: underline, line-through, overline
@@ -548,14 +562,23 @@ export function typographyToTailwind(typography: any, variableMap: VariableMap):
   }
 
   // Check for letterSpacing OR letterSpacingVariable (value can be 0 but still have a variable)
-  if (typography.letterSpacing || typography.letterSpacingVariable) {
+  if (typography.letterSpacing !== undefined || typography.letterSpacingVariable) {
     if (typography.letterSpacingVariable) {
-      const tailwindVarName = figmaVariableToTailwindClass(typography.letterSpacingVariable);
+      // Always store the variable value in variableMap for CSS config
       const value = typeof typography.letterSpacing === "object" && "unit" in typography.letterSpacing
         ? `${typography.letterSpacing.value}${typography.letterSpacing.unit === "PERCENT" ? "%" : "px"}`
         : `${typography.letterSpacing}px`;
       variableMap[typography.letterSpacingVariable] = value;
-      classes.push(`tracking-[var(--${tailwindVarName})]`);
+      
+      const letterSpacingValue = extractLetterSpacingValue(typography.letterSpacingVariable);
+      if (letterSpacingValue) {
+        // Use Tailwind tracking class directly from variable name
+        classes.push(`tracking-${letterSpacingValue}`);
+      } else {
+        // Fallback to arbitrary value
+        const tailwindVarName = figmaVariableToTailwindClass(typography.letterSpacingVariable);
+        classes.push(`tracking-[var(--${tailwindVarName})]`);
+      }
     } else {
       if (typeof typography.letterSpacing === "object") {
         classes.push(`tracking-[${typography.letterSpacing.value}${typography.letterSpacing.unit === "PERCENT" ? "%" : "px"}]`);
