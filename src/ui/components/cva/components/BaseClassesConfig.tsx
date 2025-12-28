@@ -12,32 +12,28 @@ import "./BaseClassesConfig.scss";
 
 /**
  * Base Classes Configuration component
- * Allows users to select which classes should be included in the CVA base
+ * Table-based layout matching the variants matrix UI
  */
 export function BaseClassesConfig() {
   const { extractedClasses, toggleBaseClass, selectAllBaseClasses, deselectAllBaseClasses } = useCVA();
   
-  const [isExpanded, setIsExpanded] = useState(false); // Collapsed by default
+  const [isExpanded, setIsExpanded] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [collapsedCategories, setCollapsedCategories] = useState<Set<ClassCategory>>(
-    new Set(Object.keys(CLASS_CATEGORIES) as ClassCategory[]) // All collapsed by default
+    new Set(Object.keys(CLASS_CATEGORIES) as ClassCategory[])
   );
 
-  // Filter classes based on search
   const filteredClasses = useMemo(() => {
     return filterClasses(extractedClasses, searchTerm);
   }, [extractedClasses, searchTerm]);
 
-  // Group classes by category
   const groupedClasses = useMemo(() => {
     return groupClassesByCategory(filteredClasses);
   }, [filteredClasses]);
 
-  // Total counts
   const totalSelected = getSelectedCount(extractedClasses);
   const totalClasses = getTotalCount(extractedClasses);
 
-  // Toggle category collapse
   const toggleCategory = (category: ClassCategory) => {
     setCollapsedCategories(prev => {
       const next = new Set(prev);
@@ -50,40 +46,38 @@ export function BaseClassesConfig() {
     });
   };
 
-  // Expand all categories
-  const expandAll = () => {
-    setCollapsedCategories(new Set());
-  };
-
-  // Collapse all categories
-  const collapseAll = () => {
-    setCollapsedCategories(new Set(Object.keys(CLASS_CATEGORIES) as ClassCategory[]));
-  };
+  const expandAll = () => setCollapsedCategories(new Set());
+  const collapseAll = () => setCollapsedCategories(new Set(Object.keys(CLASS_CATEGORIES) as ClassCategory[]));
 
   if (extractedClasses.length === 0) {
     return (
       <div className="base-classes-config">
-        <div className="base-classes-empty">
-          <p>No classes extracted yet.</p>
-          <p className="hint">Use the Extractor tool to get classes from your Figma component.</p>
+        <div className="section-header" onClick={() => setIsExpanded(!isExpanded)}>
+          <button className="expand-btn">{isExpanded ? "▼" : "▶"}</button>
+          <h3>Base Classes</h3>
+          <span className="class-count">0 / 0</span>
         </div>
+        {isExpanded && (
+          <div className="empty-state">
+            <p>No classes extracted yet.</p>
+            <p className="hint">Use the Extractor tool to get classes from your Figma component.</p>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="base-classes-config">
-      <div className="base-classes-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <button className="expand-btn">
-          {isExpanded ? "▼" : "▶"}
-        </button>
+      <div className="section-header" onClick={() => setIsExpanded(!isExpanded)}>
+        <button className="expand-btn">{isExpanded ? "▼" : "▶"}</button>
         <h3>Base Classes</h3>
         <span className="class-count">{totalSelected} / {totalClasses}</span>
       </div>
 
       {isExpanded && (
-        <>
-          <div className="base-classes-controls">
+        <div className="card-content">
+          <div className="controls-row">
             <input
               type="text"
               className="search-input"
@@ -93,18 +87,10 @@ export function BaseClassesConfig() {
               onClick={(e) => e.stopPropagation()}
             />
             <div className="control-buttons">
-              <button 
-                className="control-btn"
-                onClick={() => selectAllBaseClasses()}
-                title="Select all classes"
-              >
+              <button className="control-btn" onClick={() => selectAllBaseClasses()}>
                 Select All
               </button>
-              <button 
-                className="control-btn"
-                onClick={() => deselectAllBaseClasses()}
-                title="Deselect all classes"
-              >
+              <button className="control-btn" onClick={() => deselectAllBaseClasses()}>
                 Deselect All
               </button>
               <button 
@@ -117,94 +103,123 @@ export function BaseClassesConfig() {
             </div>
           </div>
 
-          <div className="base-classes-list">
-        {Array.from(groupedClasses.entries()).map(([category, classes]) => {
-          if (classes.length === 0) return null;
-          
-          const isCollapsed = collapsedCategories.has(category);
-          const categoryConfig = CLASS_CATEGORIES[category];
-          const selectedInCategory = getSelectedCount(classes);
-          const totalInCategory = classes.length;
-
-          return (
-            <div key={category} className="class-category">
-              <button 
-                className="category-header"
-                onClick={() => toggleCategory(category)}
-              >
-                <span className="collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
-                <span className="category-label">{categoryConfig.label}</span>
-                <span className="category-count">
-                  {selectedInCategory} / {totalInCategory}
-                </span>
-                <div className="category-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="action-btn"
-                    onClick={() => selectAllBaseClasses(category)}
-                    title="Select all in category"
-                  >
-                    +
-                  </button>
-                  <button
-                    className="action-btn"
-                    onClick={() => deselectAllBaseClasses(category)}
-                    title="Deselect all in category"
-                  >
-                    −
-                  </button>
-                </div>
-              </button>
+          <div className="categories-container">
+            {Array.from(groupedClasses.entries()).map(([category, classes]) => {
+              if (classes.length === 0) return null;
               
-              {!isCollapsed && (
-                <div className="category-classes">
-                  {classes.map((cls) => (
-                    <ClassItem
-                      key={cls.id}
-                      extractedClass={cls}
-                      onToggle={() => toggleBaseClass(cls.id)}
-                    />
-                  ))}
+              const isCollapsed = collapsedCategories.has(category);
+              const categoryConfig = CLASS_CATEGORIES[category];
+              const selectedInCategory = getSelectedCount(classes);
+
+              return (
+                <div key={category} className="category-section">
+                  <div className="category-header" onClick={() => toggleCategory(category)}>
+                    <span className="collapse-icon">{isCollapsed ? "▶" : "▼"}</span>
+                    <span className="category-name">{categoryConfig.label}</span>
+                    <span className="category-count">{selectedInCategory} / {classes.length}</span>
+                    <div className="category-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="action-btn"
+                        onClick={() => selectAllBaseClasses(category)}
+                        title="Select all"
+                      >
+                        +
+                      </button>
+                      <button
+                        className="action-btn"
+                        onClick={() => deselectAllBaseClasses(category)}
+                        title="Deselect all"
+                      >
+                        −
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {!isCollapsed && (
+                    <table className="classes-table">
+                      <thead>
+                        <tr>
+                          <th className="col-checkbox"></th>
+                          <th className="col-class">Class</th>
+                          <th className="col-dom">DOM Elements</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {classes.map((cls) => (
+                          <ClassRow 
+                            key={cls.id} 
+                            extractedClass={cls}
+                            onToggle={() => toggleBaseClass(cls.id)}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-/**
- * Individual class item component
- */
-interface ClassItemProps {
+interface ClassRowProps {
   extractedClass: ExtractedClass;
   onToggle: () => void;
 }
 
-function ClassItem({ extractedClass, onToggle }: ClassItemProps) {
-  const { className, isSelected, isUsedInVariant } = extractedClass;
+function ClassRow({ extractedClass, onToggle }: ClassRowProps) {
+  const { className, isSelected, isUsedInVariant, domElements } = extractedClass;
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const displayElements = domElements.slice(0, 2);
+  const remainingCount = domElements.length - 2;
 
   return (
-    <label 
-      className={`class-item ${isUsedInVariant ? "used-in-variant" : ""} ${isSelected ? "selected" : ""}`}
-      title={isUsedInVariant ? "Used in a variant (removed from base)" : className}
-    >
-      <input
-        type="checkbox"
-        checked={isSelected && !isUsedInVariant}
-        onChange={onToggle}
-        disabled={isUsedInVariant}
-      />
-      <span className="class-name">{className}</span>
-      {isUsedInVariant && (
-        <span className="variant-indicator" title="Used in variant">V</span>
-      )}
-    </label>
+    <tr className={`class-row ${isUsedInVariant ? "used-in-variant" : ""} ${isSelected ? "selected" : ""}`}>
+      <td className="checkbox-cell">
+        <input
+          type="checkbox"
+          checked={isSelected && !isUsedInVariant}
+          onChange={onToggle}
+          disabled={isUsedInVariant}
+        />
+      </td>
+      <td className="class-cell">
+        <span className={`class-name ${isUsedInVariant ? "strikethrough" : ""}`}>
+          {className}
+        </span>
+      </td>
+      <td className="dom-cell">
+        {domElements.length > 0 ? (
+          <div 
+            className="dom-badges"
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+          >
+            {displayElements.map((el, i) => (
+              <span key={i} className={`dom-badge ${isUsedInVariant ? 'muted' : ''}`}>{el}</span>
+            ))}
+            {remainingCount > 0 && (
+              <span className={`dom-badge more ${isUsedInVariant ? 'muted' : ''}`}>+{remainingCount}</span>
+            )}
+            {showTooltip && domElements.length > 2 && (
+              <div className="dom-tooltip">
+                <div className="tooltip-title">Applied to:</div>
+                <ul className="tooltip-list">
+                  {domElements.map((el, i) => (
+                    <li key={i}>{el}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 
 export default BaseClassesConfig;
-

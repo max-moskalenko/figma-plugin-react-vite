@@ -1,4 +1,4 @@
-// CompoundVariantsConfig - Simple card, no extra wrappers
+// CompoundVariantsConfig - Table layout matching variant cards
 // Variables
 $surface: #ffffff;
 $fill-neutral-default: #f8fafc;
@@ -27,16 +27,17 @@ $shadow-card:
   border: $border-width-1 solid $stroke-neutral;
   border-radius: $radius-md;
   box-shadow: $shadow-card;
+  overflow: hidden;
 
-  .compound-header {
+  .section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: $spacing-2 $spacing-3;
-    background: rgba($stroke-neutral, 0.06);
-    border-bottom: $border-width-1 solid $stroke-neutral;
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.06);
 
-    h4 {
+    h3 {
       margin: 0;
       font-family: $font-sans;
       font-size: $font-size-sm;
@@ -44,20 +45,20 @@ $shadow-card:
       color: $foreground-neutral;
     }
 
-    .add-btn {
+    .add-rule-btn {
       padding: $spacing-1 $spacing-2;
       font-family: $font-sans;
       font-size: $font-size-xs;
       font-weight: 500;
       color: $fill-accent-default;
-      background: $fill-neutral-default;
+      background: $surface;
       border: $border-width-1 solid $fill-accent-default;
       border-radius: $radius-md;
       cursor: pointer;
       transition: all 0.15s ease;
 
       &:hover {
-        background: rgba($fill-accent-default, 0.1);
+        background: rgba($fill-accent-default, 0.08);
       }
     }
   }
@@ -80,199 +81,245 @@ $shadow-card:
   }
 
   .compound-rules {
-    padding: $spacing-3;
     display: flex;
     flex-direction: column;
-    gap: $spacing-3;
+    gap: $spacing-2;
+    padding: $spacing-3;
+  }
 
-    .compound-rule {
-      background: $fill-neutral-default;
-      border: $border-width-1 solid $stroke-neutral;
-      border-radius: $radius-md;
+  .compound-rule {
+    background: $fill-neutral-default;
+    border: $border-width-1 solid rgba(0, 0, 0, 0.06);
+    border-radius: $radius-md;
+    overflow: hidden;
 
-      .rule-header {
+    .rule-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: $spacing-2 $spacing-3;
+      background: rgba(0, 0, 0, 0.02);
+      border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.06);
+
+      .rule-label {
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: 600;
+        color: $foreground-neutral;
+      }
+
+      .remove-rule-btn {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        font-size: 12px;
+        color: $foreground-muted;
+        background: transparent;
+        border: none;
+        border-radius: $radius-md;
+        cursor: pointer;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        padding: $spacing-2 $spacing-3;
-        background: rgba($stroke-neutral, 0.05);
-        border-bottom: $border-width-1 solid $stroke-neutral;
+        justify-content: center;
 
-        .rule-label {
+        &:hover {
+          color: #dc2626;
+          background: rgba(#dc2626, 0.08);
+        }
+      }
+    }
+
+    // Conditions table
+    .conditions-table {
+      width: 100%;
+      border-collapse: collapse;
+
+      th, td {
+        padding: $spacing-2;
+        text-align: left;
+        font-family: $font-sans;
+        font-size: $font-size-xs;
+        border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.04);
+      }
+
+      th {
+        font-weight: 600;
+        color: $foreground-muted;
+        background: rgba(0, 0, 0, 0.02);
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+      }
+
+      .col-logic {
+        width: 50px;
+        text-align: center;
+      }
+
+      .col-property {
+        width: 35%;
+      }
+
+      .col-equals {
+        width: 30px;
+        text-align: center;
+      }
+
+      .col-value {
+        width: 35%;
+      }
+
+      .col-actions {
+        width: 40px;
+        text-align: center;
+      }
+
+      .logic-cell {
+        text-align: center;
+        
+        .and-badge {
+          font-family: $font-mono;
+          font-size: 9px;
+          font-weight: 600;
+          color: $fill-accent-default;
+          padding: 2px 6px;
+          background: rgba($fill-accent-default, 0.1);
+          border-radius: 3px;
+        }
+      }
+
+      .property-cell, .value-cell {
+        .condition-select {
+          width: 100%;
+          padding: 4px $spacing-2;
           font-family: $font-mono;
           font-size: $font-size-xs;
-          font-weight: 600;
           color: $foreground-neutral;
-        }
-
-        .remove-rule-btn {
-          width: 22px;
-          height: 22px;
-          padding: 0;
-          font-size: 12px;
-          color: $foreground-muted;
-          background: $fill-neutral-default;
+          background: $surface;
           border: $border-width-1 solid $stroke-neutral;
           border-radius: $radius-md;
           cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.15s ease;
 
-          &:hover {
-            color: #dc2626;
-            border-color: #dc2626;
+          &:hover, &:focus {
+            border-color: rgba($fill-accent-default, 0.4);
+            outline: none;
+          }
+
+          &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          option {
+            font-weight: 400;
           }
         }
       }
 
-      .conditions {
-        padding: $spacing-3;
-        display: flex;
-        flex-direction: column;
-        gap: $spacing-2;
+      .equals-cell {
+        font-family: $font-mono;
+        font-size: $font-size-sm;
+        font-weight: 600;
+        color: $foreground-muted;
+        text-align: center;
+      }
 
-        .conditions-label {
-          font-family: $font-sans;
-          font-size: 10px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+      .actions-cell {
+        text-align: center;
+
+        .remove-condition-btn {
+          width: 18px;
+          height: 18px;
+          padding: 0;
+          font-size: 12px;
           color: $foreground-muted;
-        }
-
-        .condition-row {
-          display: flex;
+          background: transparent;
+          border: none;
+          border-radius: $radius-md;
+          cursor: pointer;
+          display: inline-flex;
           align-items: center;
-          gap: $spacing-2;
-          flex-wrap: wrap;
+          justify-content: center;
 
-          .and-label {
-            font-family: $font-mono;
-            font-size: 10px;
-            font-weight: 600;
-            color: $fill-accent-default;
-            padding: 2px 6px;
-            background: rgba($fill-accent-default, 0.1);
-            border-radius: 3px;
+          &:hover:not(:disabled) {
+            color: #dc2626;
+            background: rgba(#dc2626, 0.08);
           }
 
-          .condition-select {
-            padding: $spacing-1 $spacing-2;
+          &:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+          }
+        }
+      }
+    }
+
+    .rule-footer {
+      padding: $spacing-2 $spacing-3;
+      border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.04);
+
+      .add-condition-btn {
+        padding: $spacing-1 $spacing-2;
+        font-family: $font-sans;
+        font-size: 10px;
+        font-weight: 500;
+        color: $foreground-muted;
+        background: transparent;
+        border: $border-width-1 dashed $stroke-neutral;
+        border-radius: $radius-md;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+          color: $fill-accent-default;
+          border-color: $fill-accent-default;
+        }
+      }
+    }
+
+    // Apply section
+    .apply-section {
+      .apply-table {
+        width: 100%;
+        border-collapse: collapse;
+
+        th, td {
+          padding: $spacing-2 $spacing-3;
+          text-align: left;
+          font-family: $font-sans;
+          font-size: $font-size-xs;
+        }
+
+        th {
+          font-weight: 600;
+          color: $foreground-muted;
+          background: rgba(0, 0, 0, 0.02);
+          text-transform: uppercase;
+          font-size: 10px;
+          letter-spacing: 0.5px;
+          border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.04);
+        }
+
+        .classes-cell {
+          .classes-input {
+            width: 100%;
+            padding: $spacing-2;
             font-family: $font-mono;
             font-size: $font-size-xs;
             color: $foreground-neutral;
-            background: $fill-neutral-default;
+            background: $surface;
             border: $border-width-1 solid $stroke-neutral;
             border-radius: $radius-md;
-            cursor: pointer;
-            min-width: 120px;
+            box-sizing: border-box;
 
             &:focus {
               outline: none;
               border-color: $fill-accent-default;
             }
 
-            &:disabled {
-              opacity: 0.5;
-              cursor: not-allowed;
+            &::placeholder {
+              color: $foreground-muted;
             }
-
-            option {
-              background: $fill-neutral-default;
-              color: $foreground-neutral;
-            }
-          }
-
-          .equals {
-            font-family: $font-mono;
-            font-size: $font-size-sm;
-            font-weight: 600;
-            color: $foreground-muted;
-          }
-
-          .remove-condition-btn {
-            width: 22px;
-            height: 22px;
-            padding: 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: $foreground-muted;
-            background: $fill-neutral-default;
-            border: $border-width-1 solid $stroke-neutral;
-            border-radius: $radius-md;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s ease;
-
-            &:hover:not(:disabled) {
-              color: #dc2626;
-              border-color: #dc2626;
-            }
-
-            &:disabled {
-              opacity: 0.3;
-              cursor: not-allowed;
-            }
-          }
-        }
-
-        .add-condition-btn {
-          align-self: flex-start;
-          padding: $spacing-1 $spacing-2;
-          font-family: $font-sans;
-          font-size: 10px;
-          font-weight: 500;
-          color: $foreground-muted;
-          background: transparent;
-          border: $border-width-1 dashed $stroke-neutral;
-          border-radius: $radius-md;
-          cursor: pointer;
-          transition: all 0.15s ease;
-
-          &:hover {
-            color: $fill-accent-default;
-            border-color: $fill-accent-default;
-          }
-        }
-      }
-
-      .classes-row {
-        padding: 0 $spacing-3 $spacing-3;
-        display: flex;
-        flex-direction: column;
-        gap: $spacing-1;
-
-        .classes-label {
-          font-family: $font-sans;
-          font-size: 10px;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: $foreground-muted;
-        }
-
-        .classes-input {
-          width: 100%;
-          padding: $spacing-2;
-          font-family: $font-mono;
-          font-size: $font-size-xs;
-          color: $foreground-neutral;
-          background: $fill-neutral-default;
-          border: $border-width-1 solid $stroke-neutral;
-          border-radius: $radius-md;
-          box-sizing: border-box;
-
-          &:focus {
-            outline: none;
-            border-color: $fill-accent-default;
-          }
-
-          &::placeholder {
-            color: $foreground-muted;
           }
         }
       }

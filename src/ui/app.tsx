@@ -613,13 +613,6 @@ function App() {
         
         <div className="action-buttons">
           <button
-            className="button button-primary"
-            onClick={handleGetCode}
-            disabled={loading}
-          >
-            <p>Get code</p>
-          </button>
-          <button
             className="button button-secondary"
             onClick={handleCopy}
             disabled={!result || loading}
@@ -685,7 +678,9 @@ function App() {
     <div className="figma-plugin">
       <LeftNavigation 
         activeToolItem={activeToolItem} 
-        onToolChange={setActiveToolItem} 
+        onToolChange={setActiveToolItem}
+        onGetCode={handleGetCode}
+        loading={loading}
       />
       
       <div className="tool-content">

@@ -25,7 +25,7 @@ export interface ExtractedClass {
   id: string;
   className: string;
   category: ClassCategory;
-  domElement?: string; // Which DOM element this class belongs to
+  domElements: string[]; // Which DOM elements this class belongs to
   isSelected: boolean; // Whether it's selected as a base class
   isUsedInVariant: boolean; // Whether it's used in any variant (auto-removed from base)
 }
@@ -89,6 +89,7 @@ export interface DOMElementMapping {
 export interface CVAVariantConfig {
   id: string;
   name: string; // Variant name (editable)
+  showPrefixes: boolean; // Whether to show the PREFIX column
   properties: CVAVariantProperty[];
   domMappings: DOMElementMapping[];
 }
@@ -173,6 +174,7 @@ export interface CVAActions {
   removeVariant: (variantId: string) => void;
   duplicateVariant: (variantId: string) => void;
   renameVariant: (variantId: string, name: string) => void;
+  toggleVariantPrefixes: (variantId: string) => void;
   
   // Variant properties
   addProperty: (variantId: string) => void;

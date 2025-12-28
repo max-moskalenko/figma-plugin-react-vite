@@ -1,9 +1,13 @@
-# Component DOM Extractor - Figma Plugin
+# Figma Design-to-Code Plugin
 
-A Figma plugin that extracts the complete DOM structure of selected components, including all visual and behavioral context. The plugin intelligently detects and uses Figma variables where applicable, falling back to raw values when variables aren't bound.
+A comprehensive Figma plugin for extracting component styles and generating production-ready code. The plugin includes two powerful tools:
+
+1. **DOM Extractor** - Extracts complete DOM structure with styles in CSS or Tailwind format
+2. **CVA Mapping Tool** - Generates type-safe [Class Variance Authority](https://cva.style/) configurations from component variants
 
 ## Features
 
+### DOM Extractor
 - **Complete Component Extraction**: Extracts full DOM structure with hierarchical node relationships
 - **Variable Detection**: Automatically detects and uses Figma variables for colors, spacing, typography, borders, and more
 - **Component Set Support**: Extracts all variants when a COMPONENT_SET is selected
@@ -14,9 +18,18 @@ A Figma plugin that extracts the complete DOM structure of selected components, 
 - **Text Content Extraction**: Preserves text content from TEXT nodes with proper font loading
 - **Intelligent Class Mapping**: Converts Figma design tokens to semantic Tailwind classes (e.g., `spacing-7` → `p-7`, `gap-7`)
 
+### CVA Mapping Tool
+- **Visual Variant Mapping**: Map CSS classes to component variant properties visually
+- **Automatic Property Detection**: Extracts variant properties from Figma component definitions
+- **Class Categorization**: Organizes classes by purpose (fill, typography, spacing, etc.)
+- **Pseudo-class Support**: Configure hover, active, focus, and disabled states per variant value
+- **Compound Variants**: Create conditional class combinations based on multiple properties
+- **Type-safe Output**: Generates TypeScript code with proper VariantProps types
+- **See [CVA Mapping Documentation](./CVA_MAPPING.md)** for detailed technical documentation
+
 ## How It Works
 
-### Architecture
+### Quick Overview
 
 The plugin uses a two-side architecture (plugin code and UI) that communicate via `monorepo-networker`:
 
@@ -35,28 +48,15 @@ The plugin uses a two-side architecture (plugin code and UI) that communicate vi
                     └─────────────────┘
 ```
 
-### Extraction Pipeline
+The extraction process extracts node hierarchies, resolves Figma variables, loads fonts, and generates output in CSS or Tailwind format.
 
-The extraction process follows these steps:
-
-```mermaid
-flowchart TD
-    A[User Selects Component] --> B[Handle COMPONENT_SET]
-    B --> C[Traverse Node Tree]
-    C --> D[Extract Styles with Variables]
-    D --> E[Load Fonts for Text Nodes]
-    E --> F[Extract Text Content]
-    F --> G[Generate CSS Variables]
-    G --> H[Generate HTML with Inline Styles]
-    H --> I[Return Combined Output]
-```
-
-1. **Selection Handling**: If a COMPONENT_SET is selected, all component variants are extracted
-2. **Tree Traversal**: Recursively traverses the node tree to build a hierarchical structure
-3. **Style Extraction**: Extracts all style properties (fills, strokes, effects, typography, layout) with variable resolution
-4. **Font Loading**: Loads fonts asynchronously for TEXT nodes before accessing text content
-5. **Style Conversion**: Converts extracted styles to CSS properties or Tailwind classes based on selected format
-6. **HTML Generation**: Generates HTML with inline styles (CSS format) or className attributes (Tailwind format)
+**For detailed technical documentation on the extractor, see [EXTRACTOR_DOCUMENTATION.md](./EXTRACTOR_DOCUMENTATION.md)**, which covers:
+- Complete extraction pipeline details
+- Style extraction and variable resolution
+- Component traversal algorithm
+- Output format specifications
+- Extending the extractor
+- Debugging and troubleshooting
 
 ## What It Extracts
 
@@ -349,30 +349,57 @@ The plugin checks these property names when resolving variables:
 - **Font Loading**: Requires fonts to be available in Figma for text extraction
 - **Variable Modes**: Currently uses the first mode from variable collections
 
+## Documentation
+
+This project includes comprehensive documentation:
+
+- **[README.md](./README.md)** (this file) - Overview, features, and usage instructions
+- **[EXTRACTOR_DOCUMENTATION.md](./EXTRACTOR_DOCUMENTATION.md)** - Complete technical documentation for the DOM Extractor Tool
+- **[CVA_MAPPING.md](./CVA_MAPPING.md)** - Complete technical documentation for the CVA Mapping Tool
+- **[CSS_TO_TAILWIND_MAPPING.md](./CSS_TO_TAILWIND_MAPPING.md)** - Detailed Tailwind remapping rules and patterns
+- **[REFACTORING_SUMMARY.md](./REFACTORING_SUMMARY.md)** - Project refactoring history
+
 ## Development
 
 ### Project Structure
 
 ```
 src/
-├── common/                    # Shared code between plugin and UI
-│   ├── cssGenerator.ts        # CSS generation with variable support
-│   ├── tailwindGenerator.ts   # Tailwind class generation with remapping logic
-│   ├── domGenerator.ts        # HTML generation with inline styles (CSS format)
-│   ├── tailwindDomGenerator.ts # HTML generation with Tailwind classes
-│   └── networkSides.ts        # Communication channel definitions
-├── plugin/                    # Plugin-side code (runs in Figma)
+├── common/                         # Shared code between plugin and UI
+│   ├── cssGenerator.ts             # CSS generation with variable support
+│   ├── cvaGenerator.ts             # CVA code generation
+│   ├── tailwindGenerator.ts        # Tailwind class generation with remapping logic
+│   ├── domGenerator.ts             # HTML generation with inline styles (CSS format)
+│   ├── tailwindDomGenerator.ts     # HTML generation with Tailwind classes
+│   ├── rawJsonGenerator.ts         # Raw JSON output generation
+│   └── networkSides.ts             # Communication channel definitions
+├── plugin/                         # Plugin-side code (runs in Figma)
 │   ├── extractors/
-│   │   ├── componentTraverser.ts  # Node tree traversal
-│   │   └── styleExtractor.ts      # Style extraction with variable resolution
-│   ├── plugin.network.ts       # Message handlers and extraction orchestration
-│   └── plugin.ts              # Plugin entry point
-└── ui/                        # UI-side code (React app)
-    ├── app.tsx                # Main UI component with format toggle
-    └── app.network.tsx        # UI communication setup
+│   │   ├── componentTraverser.ts   # Node tree traversal
+│   │   └── styleExtractor.ts       # Style extraction with variable resolution
+│   ├── plugin.network.ts           # Message handlers and extraction orchestration
+│   └── plugin.ts                   # Plugin entry point
+└── ui/                             # UI-side code (React app)
+    ├── app.tsx                     # Main UI component with tool switching
+    ├── app.network.tsx             # UI communication setup
+    └── components/
+        ├── cva/                    # CVA Mapping Tool
+        │   ├── CVATool.tsx         # Main CVA tool container
+        │   ├── CVAContext.tsx      # React Context for CVA state
+        │   ├── types.ts            # TypeScript type definitions
+        │   ├── hooks/
+        │   │   └── useCVAState.ts  # State management and extraction logic
+        │   ├── utils/
+        │   │   └── classManager.ts # Class categorization utilities
+        │   └── components/         # UI components (VariantCard, BaseClasses, etc.)
+        ├── shared/
+        │   └── LeftNavigation.tsx  # Tool navigation sidebar
+        └── OutputDisplay.tsx       # Code output display component
 ```
 
 ### Key Files
+
+#### DOM Extractor
 
 - **`src/common/tailwindGenerator.ts`**: Core CSS-to-Tailwind remapping logic
   - Property-specific conversion functions (spacing, typography, colors, layout, etc.)
@@ -394,18 +421,34 @@ src/
   - Handles COMPONENT_SET nodes
   - Coordinates style extraction and DOM generation
 
+#### CVA Mapping Tool
+
+- **`src/common/cvaGenerator.ts`**: CVA code generation
+  - Generates properly formatted CVA TypeScript code
+  - Handles variants, compound variants, and default variants
+  - Exports VariantProps types
+
+- **`src/ui/components/cva/hooks/useCVAState.ts`**: CVA state management
+  - Class extraction from Tailwind output
+  - Property detection from code snippets and Figma API
+  - Variant name filtering logic
+  - DOM element mapping
+
+- **`src/ui/components/cva/utils/classManager.ts`**: Class categorization
+  - Pattern-based class categorization
+  - Category grouping utilities
+  - Search and filter functions
+
+- **`src/ui/components/cva/types.ts`**: Type definitions
+  - CVA configuration interfaces
+  - Pseudo-class prefix definitions
+  - State and action types
+
 ### Build Commands
 
 - `npm run build` - Build for production
 - `npm run dev` - Watch mode for development
 - `npm run types` - Type check TypeScript
-
-### Key Files
-
-- **`src/plugin/extractors/styleExtractor.ts`**: Core style extraction logic with variable resolution
-- **`src/common/cssGenerator.ts`**: Converts extracted styles to CSS with variable support
-- **`src/common/domGenerator.ts`**: Generates HTML with inline styles and formatting
-- **`src/plugin/plugin.network.ts`**: Main extraction handler and orchestration
 
 ## License
 

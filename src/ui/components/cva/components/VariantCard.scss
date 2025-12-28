@@ -113,6 +113,21 @@ $shadow-card:
           color: #dc2626;
           border-color: #dc2626;
         }
+
+        &.pseudo-toggle {
+          color: $foreground-muted;
+          
+          &:hover {
+            color: $fill-accent-default;
+            border-color: rgba($fill-accent-default, 0.3);
+          }
+
+          &.active {
+            color: $fill-accent-default;
+            background: rgba($fill-accent-default, 0.08);
+            border-color: rgba($fill-accent-default, 0.3);
+          }
+        }
       }
     }
   }

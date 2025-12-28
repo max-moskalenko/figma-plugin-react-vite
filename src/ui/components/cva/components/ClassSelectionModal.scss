@@ -1,4 +1,6 @@
 // ClassSelectionModal styles - Light theme with DOM sidebar
+@use "sass:color";
+
 $surface: #ffffff;
 $fill-neutral-default: #f8fafc;
 $fill-accent-default: #2b7fff;
@@ -375,7 +377,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       cursor: pointer;
 
       &:hover {
-        background: darken($fill-accent-default, 8%);
+        background: color.adjust($fill-accent-default, $lightness: -8%);
       }
     }
   }

@@ -16,7 +16,69 @@ import {
 } from "../types";
 
 /**
- * Generate a unique ID
+ * CVA State Management Hook
+ * 
+ * This hook is the core state management system for the CVA Mapping Tool.
+ * It handles all state, actions, and business logic for:
+ * 
+ * 1. CLASS EXTRACTION AND CATEGORIZATION:
+ *    - Extracts CSS classes from Tailwind output
+ *    - Categorizes classes by purpose (fill, typography, spacing, etc.)
+ *    - Associates classes with DOM elements for filtering
+ *    - Filters out Figma variant names (which aren't real CSS classes)
+ * 
+ * 2. PROPERTY DETECTION:
+ *    - Parses property=value pairs from raw code snippets
+ *    - Extracts properties from Figma's componentProperties API
+ *    - Merges and normalizes boolean values (True/False → true/false)
+ *    - Auto-creates variant configs from detected properties
+ * 
+ * 3. VARIANT CONFIGURATION:
+ *    - Manages variant cards (add, remove, duplicate, rename)
+ *    - Manages properties and values within variants
+ *    - Handles prefix slots for interactive states (hover, active, etc.)
+ *    - Tracks which classes are used in variants vs. base classes
+ * 
+ * 4. BASE CLASS SELECTION:
+ *    - Toggle individual classes for base classes
+ *    - Bulk select/deselect by category
+ *    - Prevents classes used in variants from being base classes
+ * 
+ * 5. COMPOUND VARIANTS:
+ *    - Create rules with multiple conditions
+ *    - Assign classes to compound variant rules
+ * 
+ * 6. DEFAULT VARIANTS:
+ *    - Set default values for variant properties
+ * 
+ * 7. CLASS MODAL:
+ *    - Manages modal state for class selection
+ *    - Tracks which prefix slot is being edited
+ * 
+ * STATE STRUCTURE:
+ * - mode: "mapping" | "code" (current view mode)
+ * - extractorResult: Data from DOM Extractor tool
+ * - componentProperties: Figma properties and variants
+ * - extractedClasses: All classes with metadata (category, DOM elements, usage)
+ * - config: CVA configuration (base, variants, compound, defaults)
+ * - classModalTarget: Currently open modal target
+ * 
+ * All actions are memoized with useCallback for performance.
+ * Base classes are computed from extractedClasses selection state.
+ */
+
+/**
+ * Generate a unique ID for variant configs, properties, values, etc.
+ * 
+ * Uses timestamp + random string to ensure uniqueness across:
+ * - Variant configs
+ * - Properties
+ * - Property values
+ * - Prefix slots
+ * - Compound variant rules
+ * - Compound conditions
+ * 
+ * @returns Unique ID string (e.g., "1704123456789-abc123def")
  */
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -24,6 +86,25 @@ function generateId(): string {
 
 /**
  * Categorize a class name based on patterns
+ * 
+ * Determines which category a CSS class belongs to by testing against
+ * various Tailwind utility class patterns. This is used to organize classes
+ * in the UI for easier selection.
+ * 
+ * CATEGORIES:
+ * - fill: Backgrounds and fill colors (bg-, fill-, background)
+ * - stroke: Borders and outlines (border-, stroke-, outline-)
+ * - border-radius: Border radius utilities (rounded, border-radius)
+ * - typography: Text styling (text-, font-, leading-, tracking-, transforms, decorations)
+ * - spacing: Padding, margin, gap (p-, m-, gap-, space-)
+ * - layout: Display, positioning, sizing, flex/grid (flex, grid, w-, h-, position, alignment)
+ * - effects: Shadows, opacity, blur, transitions, transforms
+ * - other: Everything else that doesn't match a pattern
+ * 
+ * The function tests patterns in order. First match wins.
+ * 
+ * @param className - CSS class name to categorize
+ * @returns ClassCategory enum value
  */
 function categorizeClass(className: string): ClassCategory {
   const lowerClass = className.toLowerCase();
@@ -68,8 +149,31 @@ function categorizeClass(className: string): ClassCategory {
 
 /**
  * Check if a class name is actually a Figma variant name (should be excluded)
- * Variant names look like: vis-height-h-28-vis-iconbutton-false-interaction-hover-vis-sentiment-brand
- * They contain multiple property-value segments joined together
+ * 
+ * Figma generates variant names by concatenating all property-value pairs with hyphens.
+ * These look like CSS classes but aren't - they're just identifiers.
+ * 
+ * EXAMPLE VARIANT NAMES:
+ * - "vis-height-h-28-vis-iconbutton-false-interaction-hover-vis-sentiment-brand"
+ * - "size-small-variant-primary-disabled-true"
+ * 
+ * DETECTION ALGORITHM:
+ * 1. Must be at least 20 characters (variant combos are long)
+ * 2. Must have at least 5 hyphen-separated segments
+ * 3. Must match 2+ of these patterns:
+ *    - Starts with "vis-"
+ *    - Contains "-vis-"
+ *    - Contains boolean values: "-(true|false)-" or ends with "-(true|false)"
+ *    - Contains "-interaction-"
+ *    - Contains "-disabled-"
+ *    - Contains "-sentiment-"
+ * 
+ * WHY FILTER THESE OUT:
+ * Variant names appear in className attributes when extracting component sets,
+ * but they're not actual CSS classes and shouldn't be selectable in the CVA tool.
+ * 
+ * @param className - Potential class name to check
+ * @returns true if this looks like a Figma variant name, false if it's a real CSS class
  */
 function isFigmaVariantName(className: string): boolean {
   // Variant names are typically long and contain multiple vis- or property-value patterns
@@ -104,43 +208,142 @@ function isFigmaVariantName(className: string): boolean {
 }
 
 /**
- * Extract classes from the Tailwind stylesheet output
+ * Check if a class is likely a DOM element name (not a utility class)
+ * 
+ * Distinguishes between semantic element names (like "slider-root", "Label.Root")
+ * and Tailwind utility classes (like "flex", "p-4").
+ * 
+ * ELEMENT NAME PATTERNS:
+ * - Contains dots (e.g., "Label.Root", "Button.Icon")
+ * - Starts with uppercase (e.g., "ComponentName")
+ * - Common HTML element names (e.g., "div", "span", "button")
+ * - Hyphenated lowercase names (e.g., "slider-root", "label-div")
+ * 
+ * UTILITY CLASS PATTERNS (excluded):
+ * - Starts with common Tailwind prefixes (flex, grid, w-, h-, p-, m-, bg-, text-, etc.)
+ * 
+ * This is used to identify element names in className attributes, which are
+ * then associated with CSS classes for filtering in the class selection modal.
+ * 
+ * @param className - Class name to check
+ * @returns true if it looks like an element name, false if it looks like a utility class
  */
-function extractClassesFromStylesheet(stylesheet: string): string[] {
-  const classes: Set<string> = new Set();
+function isElementName(className: string): boolean {
+  // Element names: slider-root, Label.Root, div, label-div
+  const looksLikeElement = /^[a-zA-Z][\w.-]*$/.test(className) && 
+    (className.includes('.') || // Label.Root
+     /^[A-Z]/.test(className) || // Component names
+     ['div', 'span', 'p', 'button', 'input', 'label'].includes(className.toLowerCase()) ||
+     // Common element naming patterns like slider-root, label-div
+     /^[a-z]+-[a-z]+$/.test(className) ||
+     /^[a-z]+-[a-z]+-[a-z]+$/.test(className));
+  
+  // Exclude common utility class patterns
+  const isUtilityClass = /^(flex|grid|w-|h-|p-|m-|bg-|text-|border-|rounded|gap-|items-|justify-|relative|absolute|font-|overflow|cursor|transition|shadow|ring)/.test(className);
+  
+  return looksLikeElement && !isUtilityClass;
+}
+
+interface ClassWithDOMElements {
+  className: string;
+  domElements: string[];
+}
+
+/**
+ * Extract classes from Tailwind stylesheet with DOM element associations
+ * 
+ * Parses the generated HTML to extract all CSS classes and associate them
+ * with the DOM elements they appear on. This enables filtering classes by
+ * element in the class selection modal.
+ * 
+ * EXTRACTION PROCESS:
+ * 1. Find all className="..." and class="..." attributes in the HTML
+ * 2. Split class string into individual classes
+ * 3. Identify the element name (first class if it looks like an element name)
+ * 4. Map each utility class to the element(s) it appears on
+ * 5. Filter out Figma variant names
+ * 
+ * ELEMENT IDENTIFICATION:
+ * - If first class looks like element name → use it as element
+ * - If first class is a variant name → label as "variant"
+ * - Otherwise → label as "root"
+ * 
+ * RESULT:
+ * Each class is mapped to an array of element names it appears on.
+ * Example: "p-4" might appear on ["button-root", "label-text"]
+ * 
+ * @param stylesheet - HTML+classes string from Tailwind generator
+ * @returns Array of {className, domElements[]} objects
+ */
+function extractClassesWithDOMElements(stylesheet: string): ClassWithDOMElements[] {
+  const classMap = new Map<string, Set<string>>(); // className -> Set of domElements
   
   // Match className="..." patterns
-  const classNameRegex = /className="([^"]+)"/g;
+  const classNameRegex = /<\w+\s+(?:className|class)="([^"]+)"/g;
   let match;
   
   while ((match = classNameRegex.exec(stylesheet)) !== null) {
     const classString = match[1];
-    classString.split(/\s+/).forEach(cls => {
+    const allClasses = classString.split(/\s+/).filter(c => c.trim());
+    
+    if (allClasses.length === 0) continue;
+    
+    // First class is often the element name
+    const firstClass = allClasses[0];
+    const styleClasses = allClasses.slice(1);
+    
+    // Determine the element name
+    let elementName = 'root';
+    if (isFigmaVariantName(firstClass)) {
+      // It's a variant wrapper, use "variant" or skip
+      elementName = 'variant';
+    } else if (isElementName(firstClass)) {
+      elementName = firstClass;
+    }
+    
+    // Map style classes to this element
+    styleClasses.forEach(cls => {
       const trimmed = cls.trim();
-      // Filter out Figma variant names
       if (trimmed && !isFigmaVariantName(trimmed)) {
-        classes.add(trimmed);
+        if (!classMap.has(trimmed)) {
+          classMap.set(trimmed, new Set());
+        }
+        classMap.get(trimmed)!.add(elementName);
       }
     });
-  }
-  
-  // Also match class="..." for HTML format
-  const classRegex = /class="([^"]+)"/g;
-  while ((match = classRegex.exec(stylesheet)) !== null) {
-    const classString = match[1];
-    classString.split(/\s+/).forEach(cls => {
-      const trimmed = cls.trim();
-      if (trimmed && !isFigmaVariantName(trimmed)) {
-        classes.add(trimmed);
+    
+    // Also add first class if it's a style class (not element name)
+    if (!isElementName(firstClass) && !isFigmaVariantName(firstClass)) {
+      if (!classMap.has(firstClass)) {
+        classMap.set(firstClass, new Set());
       }
-    });
+      classMap.get(firstClass)!.add('root');
+    }
   }
   
-  return Array.from(classes);
+  // Convert to array
+  return Array.from(classMap.entries()).map(([className, elements]) => ({
+    className,
+    domElements: Array.from(elements).sort(),
+  }));
 }
 
 /**
  * Extract DOM element names from the stylesheet
+ * 
+ * Extracts unique DOM element names from data-name attributes in the HTML.
+ * These names come from Figma layer names and are used for filtering classes
+ * by element in the class selection modal.
+ * 
+ * EXAMPLE:
+ * ```html
+ * <div data-name="Button Root">...</div>
+ * <p data-name="Label">...</p>
+ * ```
+ * → Returns: ["Button Root", "Label"]
+ * 
+ * @param stylesheet - HTML string from extractor
+ * @returns Array of unique element names
  */
 function extractDOMElements(stylesheet: string): string[] {
   const elements: Set<string> = new Set();
@@ -158,8 +361,32 @@ function extractDOMElements(stylesheet: string): string[] {
 
 /**
  * Extract property-value pairs from code snippet
- * Looks for patterns like "vis-height=h-28, vis-iconbutton=False, interaction=Default"
- * For boolean values (True/False, true/false), automatically adds both values
+ * 
+ * Parses the raw output to find property=value patterns, which represent
+ * Figma component properties and their values. These are used to auto-create
+ * variant configs.
+ * 
+ * PATTERN MATCHING:
+ * Looks for: property=value
+ * - Property name must start with letter, can contain letters, numbers, hyphens
+ * - Value continues until comma, space, or special character
+ * 
+ * EXAMPLES:
+ * - "vis-height=h-28" → property: "vis-height", value: "h-28"
+ * - "interaction=Default" → property: "interaction", value: "Default"
+ * - "disabled=False" → property: "disabled", values: ["true", "false"] (both added)
+ * 
+ * BOOLEAN HANDLING:
+ * When a boolean value (True/False, true/false) is detected, BOTH "true" and "false"
+ * are added to the value set. This ensures the variant has both options even if
+ * only one is present in the current component variant.
+ * 
+ * FILTERING:
+ * Skips properties starting with "data-", "class", or "className" as these
+ * aren't variant properties.
+ * 
+ * @param rawStylesheet - Raw JSON/HTML string from extractor
+ * @returns Map of property name → Set of values
  */
 function extractPropertiesFromSnippet(rawStylesheet: string): Map<string, Set<string>> {
   const properties = new Map<string, Set<string>>();
@@ -196,7 +423,17 @@ function extractPropertiesFromSnippet(rawStylesheet: string): Map<string, Set<st
 
 /**
  * Extract DOM element names from the raw JSON output
- * Looks for "name" fields in the children array
+ * 
+ * Alternative method for extracting element names, used as fallback or
+ * in addition to extractDOMElements(). Parses "name" fields from the
+ * raw JSON structure.
+ * 
+ * FILTERING:
+ * - Skips names containing "=" (these are variant combinations, not element names)
+ * - Skips names longer than 50 characters (likely not real element names)
+ * 
+ * @param rawStylesheet - Raw JSON string from extractor
+ * @returns Array of unique element names
  */
 function extractDOMElementsFromRaw(rawStylesheet: string): string[] {
   const elements = new Set<string>();
@@ -217,7 +454,17 @@ function extractDOMElementsFromRaw(rawStylesheet: string): string[] {
 }
 
 /**
- * Check if a property name suggests it should have prefix mode (for interaction states)
+ * Check if a property name suggests it should have prefix mode enabled
+ * 
+ * Some properties (like "interaction", "state") typically have values that
+ * correspond to pseudo-class states (hover, active, focus, etc.). For these
+ * properties, prefix mode is useful for organizing classes by state.
+ * 
+ * Currently not used in the codebase, but kept for potential future
+ * auto-detection features.
+ * 
+ * @param propName - Property name to check
+ * @returns true if this property should default to prefix mode
  */
 function shouldHavePrefixes(propName: string): boolean {
   const interactiveProps = ['interaction', 'state'];
@@ -226,6 +473,23 @@ function shouldHavePrefixes(propName: string): boolean {
 
 /**
  * Get suggested prefix for a value name
+ * 
+ * Returns a suggested Tailwind prefix based on the value name.
+ * Used for auto-suggesting prefixes when a value name matches
+ * a common interaction state.
+ * 
+ * Currently not used in the codebase, but kept for potential future
+ * auto-suggestion features.
+ * 
+ * MAPPINGS:
+ * - "hover" → "hover:"
+ * - "active"/"pressed" → "active:"
+ * - "focus"/"focused" → "focus:"
+ * - "disabled" → "disabled:"
+ * - default → "" (no prefix)
+ * 
+ * @param valueName - Property value name (e.g., "hover", "active")
+ * @returns Suggested Tailwind prefix (e.g., "hover:", "active:")
  */
 function getSuggestedPrefix(valueName: string): string {
   const lower = valueName.toLowerCase();
@@ -237,7 +501,17 @@ function getSuggestedPrefix(valueName: string): string {
 }
 
 /**
- * Create a default prefixed classes entry (base with no prefix)
+ * Create a default prefixed classes entry (base state with no prefix)
+ * 
+ * Creates an empty prefix slot with:
+ * - Unique ID
+ * - Empty prefix (base/default state)
+ * - Empty classes array
+ * 
+ * This is used when creating new property values. Each value starts
+ * with one empty prefix slot that the user can populate with classes.
+ * 
+ * @returns New CVAPrefixedClasses object with empty values
  */
 function createDefaultPrefixedClasses(): CVAPrefixedClasses {
   return {
@@ -249,6 +523,30 @@ function createDefaultPrefixedClasses(): CVAPrefixedClasses {
 
 /**
  * Create variant configs from extracted properties
+ * 
+ * Auto-generates variant card configurations from the detected property-value
+ * pairs. This provides a starting point for users to map classes to variants.
+ * 
+ * PROCESS:
+ * 1. For each property name, create a variant config
+ * 2. Create a single property within the variant (name matches variant name)
+ * 3. For each value, create a property value with one empty prefix slot
+ * 4. Sort values alphabetically
+ * 5. Set showPrefixes to false (hidden by default)
+ * 
+ * STRUCTURE:
+ * Each variant config has:
+ * - Unique ID
+ * - Property name as variant name
+ * - One property with matching name
+ * - Array of values (each with empty prefix slot)
+ * - Empty DOM mappings array
+ * 
+ * This structure is then displayed as variant cards in the mapping UI,
+ * where users can add classes to each value.
+ * 
+ * @param properties - Map of property name → Set of values
+ * @returns Array of CVAVariantConfig objects ready for display
  */
 function createVariantsFromProperties(properties: Map<string, Set<string>>): CVAVariantConfig[] {
   const variants: CVAVariantConfig[] = [];
@@ -257,6 +555,7 @@ function createVariantsFromProperties(properties: Map<string, Set<string>>): CVA
     const variant: CVAVariantConfig = {
       id: generateId(),
       name: propName,
+      showPrefixes: false, // Prefix column hidden by default
       properties: [{
         id: generateId(),
         name: propName,
@@ -276,6 +575,11 @@ function createVariantsFromProperties(properties: Map<string, Set<string>>): CVA
 
 /**
  * Create initial CVA config
+ * 
+ * Creates an empty CVA configuration structure with default values.
+ * Used when initializing state or resetting configuration.
+ * 
+ * @returns Empty CVAConfig object
  */
 function createInitialConfig(): CVAConfig {
   return {
@@ -289,6 +593,15 @@ function createInitialConfig(): CVAConfig {
 
 /**
  * Create initial CVA state
+ * 
+ * Creates the initial state for the CVA tool with:
+ * - Mode set to "mapping"
+ * - Null extractor result and component properties
+ * - Empty extracted classes array
+ * - Empty initial config
+ * - Class modal closed
+ * 
+ * @returns Initial CVAState object
  */
 function createInitialState(): CVAState {
   return {
@@ -304,6 +617,34 @@ function createInitialState(): CVAState {
 
 /**
  * Hook for managing CVA tool state
+ * 
+ * Main state management hook for the CVA tool. Returns both state and actions
+ * for managing all aspects of CVA configuration.
+ * 
+ * STATE:
+ * - mode: Current view mode (mapping or code)
+ * - extractorResult: Data from extractor tool
+ * - componentProperties: Figma component properties
+ * - extractedClasses: All CSS classes with metadata
+ * - config: CVA configuration (base, variants, compound, defaults)
+ * - classModalTarget: Currently editing target
+ * 
+ * ACTIONS:
+ * - Mode: setMode
+ * - Data: setExtractorResult
+ * - Base classes: toggleBaseClass, selectAllBaseClasses, deselectAllBaseClasses
+ * - Variants: addVariant, removeVariant, duplicateVariant, renameVariant, toggleVariantPrefixes
+ * - Properties: addProperty, removeProperty, renameProperty, setPropertyValues
+ * - Values: addPropertyValue, removePropertyValue, renamePropertyValue
+ * - Prefix slots: addPrefixSlot, removePrefixSlot, setPrefixSlotPrefix, setPrefixSlotClasses
+ * - Compound: addCompoundVariant, removeCompoundVariant, addCompoundCondition, etc.
+ * - Defaults: setDefaultVariant, removeDefaultVariant
+ * - Modal: openClassModal, closeClassModal
+ * - Config: setComponentName, resetConfig
+ * 
+ * All actions are memoized with useCallback for optimal performance.
+ * 
+ * @returns Combined state and actions object
  */
 export function useCVAState(): CVAState & CVAActions {
   const [state, setState] = useState<CVAState>(createInitialState);
@@ -325,14 +666,15 @@ export function useCVAState(): CVAState & CVAActions {
         };
       }
 
-      // Extract classes from Tailwind output
-      const classNames = extractClassesFromStylesheet(result.tailwind.stylesheet);
+      // Extract classes from Tailwind output with DOM element associations
+      const classesWithDOM = extractClassesWithDOMElements(result.tailwind.stylesheet);
       
-      // Create ExtractedClass objects with categorization
-      const extractedClasses: ExtractedClass[] = classNames.map((className, index) => ({
-        id: `class-${index}-${className}`,
-        className,
-        category: categorizeClass(className),
+      // Create ExtractedClass objects with categorization and DOM elements
+      const extractedClasses: ExtractedClass[] = classesWithDOM.map((item, index) => ({
+        id: `class-${index}-${item.className}`,
+        className: item.className,
+        category: categorizeClass(item.className),
+        domElements: item.domElements,
         isSelected: true, // All selected as base by default
         isUsedInVariant: false,
       }));
@@ -449,6 +791,7 @@ export function useCVAState(): CVAState & CVAActions {
   const createEmptyVariant = useCallback((): CVAVariantConfig => ({
     id: generateId(),
     name: "variant",
+    showPrefixes: false,
     properties: [{
       id: generateId(),
       name: "value",
@@ -528,6 +871,20 @@ export function useCVAState(): CVAState & CVAActions {
                   idx === 0 ? { ...prop, name } : prop
                 )
               } 
+            : v
+        ),
+      },
+    }));
+  }, []);
+
+  const toggleVariantPrefixes = useCallback((variantId: string) => {
+    setState(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        variants: prev.config.variants.map(v =>
+          v.id === variantId
+            ? { ...v, showPrefixes: !v.showPrefixes }
             : v
         ),
       },
@@ -1085,6 +1442,7 @@ export function useCVAState(): CVAState & CVAActions {
     removeVariant,
     duplicateVariant,
     renameVariant,
+    toggleVariantPrefixes,
     addProperty,
     removeProperty,
     renameProperty,

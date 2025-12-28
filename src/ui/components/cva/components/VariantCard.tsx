@@ -55,6 +55,7 @@ export function VariantCard({ variant }: VariantCardProps) {
     renameVariant, 
     removeVariant, 
     duplicateVariant,
+    toggleVariantPrefixes,
     addPropertyValue,
     removePropertyValue,
     renamePropertyValue,
@@ -269,6 +270,13 @@ export function VariantCard({ variant }: VariantCardProps) {
 
         <div className="card-actions">
           <button
+            className={`action-btn pseudo-toggle ${variant.showPrefixes ? 'active' : ''}`}
+            onClick={() => toggleVariantPrefixes(variant.id)}
+            title={variant.showPrefixes ? "Hide pseudo-class prefixes" : "Show pseudo-class prefixes"}
+          >
+            Pseudo
+          </button>
+          <button
             className="action-btn"
             onClick={() => addPropertyValue(variant.id, property.id)}
             title="Add value"
@@ -294,11 +302,11 @@ export function VariantCard({ variant }: VariantCardProps) {
 
       {isExpanded && (
         <div className="card-content">
-          <table className="variant-table">
+          <table className={`variant-table ${variant.showPrefixes ? 'with-prefixes' : ''}`}>
             <thead>
               <tr>
                 <th className="col-value">Value</th>
-                <th className="col-prefix">Prefix</th>
+                {variant.showPrefixes && <th className="col-prefix">Prefix</th>}
                 <th className="col-classes">Classes</th>
                 <th className="col-actions"></th>
               </tr>
@@ -359,68 +367,70 @@ export function VariantCard({ variant }: VariantCardProps) {
                       </div>
                     </td>
                   )}
-                  <td className="prefix-cell">
-                    <div className="prefix-content">
-                      {editingPrefixSlotId === row.prefixSlotId ? (
-                        <input
-                          type="text"
-                          className="prefix-input"
-                          value={editPrefixText}
-                          onChange={(e) => setEditPrefixText(e.target.value)}
-                          onBlur={() => handlePrefixSubmit(row.valueId)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handlePrefixSubmit(row.valueId);
-                            if (e.key === "Escape") {
-                              setEditingPrefixSlotId(null);
-                              setEditPrefixText("");
+                  {variant.showPrefixes && (
+                    <td className="prefix-cell">
+                      <div className="prefix-content">
+                        {editingPrefixSlotId === row.prefixSlotId ? (
+                          <input
+                            type="text"
+                            className="prefix-input"
+                            value={editPrefixText}
+                            onChange={(e) => setEditPrefixText(e.target.value)}
+                            onBlur={() => handlePrefixSubmit(row.valueId)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handlePrefixSubmit(row.valueId);
+                              if (e.key === "Escape") {
+                                setEditingPrefixSlotId(null);
+                                setEditPrefixText("");
+                              }
+                            }}
+                            placeholder="prefix:"
+                            autoFocus
+                          />
+                        ) : (
+                          <select
+                            className="prefix-select"
+                            value={
+                              PSEUDO_CLASS_PREFIXES.some(p => p.value === row.prefix)
+                                ? row.prefix
+                                : '__custom__'
                             }
-                          }}
-                          placeholder="prefix:"
-                          autoFocus
-                        />
-                      ) : (
-                        <select
-                          className="prefix-select"
-                          value={
-                            PSEUDO_CLASS_PREFIXES.some(p => p.value === row.prefix)
-                              ? row.prefix
-                              : '__custom__'
-                          }
-                          onChange={(e) => {
-                            if (e.target.value === '__custom__') {
-                              setEditingPrefixSlotId(row.prefixSlotId);
-                              setEditPrefixText(row.prefix);
-                            } else {
-                              setPrefixSlotPrefix(variant.id, property.id, row.valueId, row.prefixSlotId, e.target.value);
-                            }
-                          }}
+                            onChange={(e) => {
+                              if (e.target.value === '__custom__') {
+                                setEditingPrefixSlotId(row.prefixSlotId);
+                                setEditPrefixText(row.prefix);
+                              } else {
+                                setPrefixSlotPrefix(variant.id, property.id, row.valueId, row.prefixSlotId, e.target.value);
+                              }
+                            }}
+                          >
+                            {PSEUDO_CLASS_PREFIXES.map(p => (
+                              <option key={p.value} value={p.value}>{p.label || '(base)'}</option>
+                            ))}
+                            <option value="__custom__">
+                              {row.prefix && !PSEUDO_CLASS_PREFIXES.some(p => p.value === row.prefix)
+                                ? row.prefix
+                                : '+ Custom...'}
+                            </option>
+                          </select>
+                        )}
+                        <button
+                          className="add-prefix-btn"
+                          onClick={() => addPrefixSlot(variant.id, property.id, row.valueId)}
+                          title="Add prefix slot"
                         >
-                          {PSEUDO_CLASS_PREFIXES.map(p => (
-                            <option key={p.value} value={p.value}>{p.label || '(base)'}</option>
-                          ))}
-                          <option value="__custom__">
-                            {row.prefix && !PSEUDO_CLASS_PREFIXES.some(p => p.value === row.prefix)
-                              ? row.prefix
-                              : '+ Custom...'}
-                          </option>
-                        </select>
-                      )}
-                      <button
-                        className="add-prefix-btn"
-                        onClick={() => addPrefixSlot(variant.id, property.id, row.valueId)}
-                        title="Add prefix slot"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </td>
+                          +
+                        </button>
+                      </div>
+                    </td>
+                  )}
                   <td 
                     className={`classes-cell ${row.classes.length > 0 ? 'has-classes' : ''}`}
                     onClick={() => handleOpenClassModal(row.valueId, row.prefixSlotId, row.classes)}
                   >
                     {row.classes.length > 0 ? (
                       <div className="class-chips">
-                        {row.prefix && <span className="chip-prefix-label">{row.prefix}</span>}
+                        {variant.showPrefixes && row.prefix && <span className="chip-prefix-label">{row.prefix}</span>}
                         {row.classes.slice(0, 5).map((cls, idx) => (
                           <span key={idx} className="class-chip">{cls}</span>
                         ))}
@@ -433,7 +443,7 @@ export function VariantCard({ variant }: VariantCardProps) {
                     )}
                   </td>
                   <td className="actions-cell">
-                    {row.canRemoveSlot && (
+                    {variant.showPrefixes && row.canRemoveSlot && (
                       <button
                         className="remove-slot-btn"
                         onClick={() => removePrefixSlot(variant.id, property.id, row.valueId, row.prefixSlotId)}

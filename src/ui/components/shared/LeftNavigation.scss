@@ -1,18 +1,31 @@
+// Light theme variables
+$surface: #ffffff;
+$surface-secondary: #f8fafc;
+$stroke-neutral: rgba(24, 24, 27, 0.12);
+$fill-accent-default: #2b7fff;
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+
 .left-navigation {
   width: 44px;
   min-width: 44px;
   height: 100%;
-  background-color: var(--color-bg-secondary, #1e1e1e);
-  border-right: 1px solid var(--color-border, rgba(255, 255, 255, 0.1));
+  background-color: $surface-secondary;
+  border-right: 1px solid $stroke-neutral;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 8px;
+  padding: 8px 0 16px 0;
   
   .nav-icons {
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .nav-bottom {
+    margin-top: auto;
+    padding-bottom: 12px;
   }
   
   .nav-icon {
@@ -25,31 +38,60 @@
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
+    color: $foreground-muted;
     transition: all 0.15s ease;
     
     &:hover {
-      background-color: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background-color: rgba(0, 0, 0, 0.04);
+      color: $foreground-neutral;
     }
     
     &:focus {
       outline: none;
-      box-shadow: 0 0 0 2px var(--color-accent, #0d99ff);
+      box-shadow: 0 0 0 2px rgba($fill-accent-default, 0.3);
     }
     
     &.active {
-      background-color: var(--color-bg-active, rgba(13, 153, 255, 0.15));
-      color: var(--color-accent, #0d99ff);
+      background-color: rgba($fill-accent-default, 0.1);
+      color: $fill-accent-default;
       
       &:hover {
-        background-color: var(--color-bg-active-hover, rgba(13, 153, 255, 0.25));
+        background-color: rgba($fill-accent-default, 0.15);
+      }
+    }
+
+    &.action-icon {
+      color: $fill-accent-default;
+      
+      &:hover {
+        background-color: rgba($fill-accent-default, 0.1);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      &.loading {
+        cursor: wait;
       }
     }
     
     svg {
       flex-shrink: 0;
     }
+
+    .spin {
+      animation: spin 1s linear infinite;
+    }
   }
 }
 
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

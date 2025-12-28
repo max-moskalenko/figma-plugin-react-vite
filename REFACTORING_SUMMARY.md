@@ -138,19 +138,27 @@ Well-documented special cases:
 ## File Structure
 
 ```
-├── CSS_TO_TAILWIND_MAPPING.md    # Complete remapping documentation
+├── CSS_TO_TAILWIND_MAPPING.md    # Complete CSS-to-Tailwind remapping documentation
+├── CVA_MAPPING.md                # Complete CVA Mapping Tool documentation
 ├── REFACTORING_SUMMARY.md        # This file
-├── README.md                      # Updated with remapping overview
+├── README.md                     # Updated with plugin overview
 └── src/
     ├── common/
     │   ├── tailwindGenerator.ts   # Enhanced with detailed annotations
     │   ├── cssGenerator.ts        # Enhanced with CSS generation docs
+    │   ├── cvaGenerator.ts        # CVA code generation with formatting
     │   ├── tailwindDomGenerator.ts # Added inline comments
-    │   └── domGenerator.ts         # Already well-documented
-    └── plugin/
-        └── extractors/
-            ├── styleExtractor.ts      # Enhanced variable resolution docs
-            └── componentTraverser.ts  # Enhanced traversal docs
+    │   └── domGenerator.ts        # Already well-documented
+    ├── plugin/
+    │   └── extractors/
+    │       ├── styleExtractor.ts      # Enhanced variable resolution docs
+    │       └── componentTraverser.ts  # Enhanced traversal docs
+    └── ui/
+        └── components/
+            └── cva/                   # CVA Mapping Tool UI components
+                ├── types.ts           # Type definitions
+                ├── hooks/useCVAState.ts # State management
+                └── utils/classManager.ts # Class categorization
 ```
 
 ## Benefits

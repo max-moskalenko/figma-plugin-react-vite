@@ -1,4 +1,4 @@
-// DefaultVariantsConfig - Simple card, no extra wrappers
+// DefaultVariantsConfig - Table layout matching variant cards
 // Variables
 $surface: #ffffff;
 $fill-neutral-default: #f8fafc;
@@ -24,11 +24,12 @@ $shadow-card:
   border: $border-width-1 solid $stroke-neutral;
   border-radius: $radius-md;
   box-shadow: $shadow-card;
+  overflow: hidden;
 
   .section-header {
     padding: $spacing-2 $spacing-3;
-    background: rgba($stroke-neutral, 0.06);
-    border-bottom: $border-width-1 solid $stroke-neutral;
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.06);
 
     h3 {
       margin: 0;
@@ -39,48 +40,81 @@ $shadow-card:
     }
   }
 
-  .default-variants-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $spacing-2;
-    padding: $spacing-3;
+  .table-container {
+    overflow-x: auto;
   }
 
-  .default-variant-item {
-    display: flex;
-    align-items: center;
-    gap: $spacing-2;
-    padding: $spacing-2 $spacing-3;
-    background: $fill-neutral-default;
-    border: $border-width-1 solid $stroke-neutral;
-    border-radius: $radius-md;
+  .defaults-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
 
-    .prop-name {
-      font-family: $font-mono;
+    th, td {
+      padding: $spacing-2 $spacing-3;
+      text-align: left;
+      font-family: $font-sans;
       font-size: $font-size-xs;
-      font-weight: 500;
-      color: $foreground-neutral;
+      border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.04);
     }
 
-    select {
-      padding: $spacing-2;
-      font-family: $font-mono;
-      font-size: $font-size-xs;
-      color: $foreground-neutral;
-      background: $surface;
-      border: $border-width-1 solid $stroke-neutral;
-      border-radius: $radius-md;
-      cursor: pointer;
-      min-width: 100px;
+    th {
+      font-weight: 600;
+      color: $foreground-muted;
+      background: rgba(0, 0, 0, 0.02);
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+    }
 
-      &:focus {
-        outline: none;
-        border-color: $fill-accent-default;
-      }
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
 
-      option {
-        background: $fill-neutral-default;
+    tbody tr:hover {
+      background: rgba(0, 0, 0, 0.01);
+    }
+
+    .col-property {
+      width: 40%;
+    }
+
+    .col-default {
+      width: 60%;
+    }
+
+    .property-cell {
+      background: rgba(0, 0, 0, 0.015);
+      border-right: $border-width-1 solid rgba(0, 0, 0, 0.06);
+
+      .prop-name {
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: 500;
         color: $foreground-neutral;
+      }
+    }
+
+    .default-cell {
+      .default-select {
+        width: 100%;
+        max-width: 200px;
+        padding: 4px $spacing-2;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        color: $foreground-neutral;
+        background: $surface;
+        border: $border-width-1 solid $stroke-neutral;
+        border-radius: $radius-md;
+        cursor: pointer;
+
+        &:hover, &:focus {
+          border-color: rgba($fill-accent-default, 0.4);
+          outline: none;
+        }
+
+        option {
+          font-weight: 400;
+        }
       }
     }
   }

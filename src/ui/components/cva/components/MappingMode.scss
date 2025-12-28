@@ -24,6 +24,7 @@ $font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: $spacing-2;
 
   // Custom scrollbar
   &::-webkit-scrollbar {
