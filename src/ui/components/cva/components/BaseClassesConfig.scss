@@ -1,0 +1,323 @@
+// BaseClassesConfig - Vertical list layout
+// Variables
+$surface: #ffffff;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.12);
+$foreground-on-accent: #fafafa;
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$radius-md: 6px;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+
+$shadow-card: 
+  0px 2px 4px -1px rgba(0, 0, 0, 0.04),
+  0px 4px 6px -1px rgba(0, 0, 0, 0.06);
+
+.base-classes-config {
+  display: flex;
+  flex-direction: column;
+  background: $surface;
+  border: $border-width-1 solid $stroke-neutral;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+  overflow: hidden;
+}
+
+.base-classes-header {
+  display: flex;
+  align-items: center;
+  gap: $spacing-1;
+  padding: $spacing-1 $spacing-2;
+  background: $fill-neutral-default;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  .expand-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    font-size: 9px;
+    color: $foreground-muted;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-md;
+    flex-shrink: 0;
+  }
+
+  h3 {
+    flex: 1;
+    margin: 0;
+    font-family: $font-sans;
+    font-size: 13px;
+    font-weight: 600;
+    color: $foreground-neutral;
+  }
+
+  .class-count {
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    color: $foreground-muted;
+  }
+}
+
+.base-classes-controls {
+  display: flex;
+  align-items: center;
+  gap: $spacing-2;
+  padding: $spacing-2 $spacing-3;
+  border-bottom: $border-width-1 solid $stroke-neutral;
+
+  .search-input {
+    flex: 1;
+    min-width: 120px;
+    padding: $spacing-1 $spacing-2;
+    font-family: $font-mono;
+    font-size: $font-size-xs;
+    border: $border-width-1 solid $stroke-neutral;
+    border-radius: $radius-md;
+    background: $fill-neutral-default;
+    color: $foreground-neutral;
+
+    &:focus {
+      outline: none;
+      border-color: $fill-accent-default;
+    }
+
+    &::placeholder {
+      color: $foreground-muted;
+    }
+  }
+
+  .control-buttons {
+    display: flex;
+    gap: $spacing-1;
+
+    .control-btn {
+      padding: $spacing-1 $spacing-2;
+      font-family: $font-sans;
+      font-size: 10px;
+      font-weight: 500;
+      color: $foreground-muted;
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      &:hover {
+        background: rgba($fill-accent-default, 0.1);
+        border-color: $fill-accent-default;
+        color: $foreground-neutral;
+      }
+
+      &.icon-btn {
+        padding: $spacing-1;
+        min-width: 24px;
+      }
+    }
+  }
+}
+
+.base-classes-list {
+  padding: $spacing-2 $spacing-3;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-2;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $stroke-neutral;
+    border-radius: 3px;
+
+    &:hover {
+      background: $foreground-muted;
+    }
+  }
+}
+
+.class-category {
+  border: $border-width-1 solid $stroke-neutral;
+  border-radius: $radius-md;
+  overflow: hidden;
+  background: $fill-neutral-default;
+
+  .category-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: $spacing-2 $spacing-3;
+    font-family: $font-sans;
+    font-size: $font-size-xs;
+    font-weight: 600;
+    color: $foreground-neutral;
+    background: rgba($stroke-neutral, 0.08);
+    border: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: rgba($stroke-neutral, 0.15);
+    }
+
+    .collapse-icon {
+      margin-right: $spacing-2;
+      font-size: 10px;
+      color: $foreground-muted;
+      width: 12px;
+    }
+
+    .category-label {
+      flex: 1;
+      text-align: left;
+    }
+
+    .category-count {
+      font-family: $font-mono;
+      font-size: 10px;
+      color: $foreground-muted;
+      margin-right: $spacing-2;
+    }
+
+    .category-actions {
+      display: flex;
+      gap: 4px;
+
+      .action-btn {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: $foreground-muted;
+        background: transparent;
+        border: $border-width-1 solid transparent;
+        border-radius: 3px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          color: $fill-accent-default;
+          border-color: $fill-accent-default;
+          background: rgba($fill-accent-default, 0.1);
+        }
+      }
+    }
+  }
+
+  .category-classes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: $spacing-2 $spacing-3;
+    background: $fill-neutral-default;
+  }
+}
+
+.class-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-family: $font-mono;
+  font-size: 10px;
+  color: $foreground-neutral;
+  background: rgba($stroke-neutral, 0.08);
+  border: $border-width-1 solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba($fill-accent-default, 0.1);
+    border-color: rgba($fill-accent-default, 0.3);
+  }
+
+  &.selected {
+    background: rgba($fill-accent-default, 0.15);
+    border-color: rgba($fill-accent-default, 0.3);
+  }
+
+  &.used-in-variant {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: line-through;
+
+    &:hover {
+      background: rgba($stroke-neutral, 0.08);
+      border-color: transparent;
+    }
+  }
+
+  input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+    accent-color: $fill-accent-default;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  .class-name {
+    user-select: none;
+  }
+
+  .variant-indicator {
+    font-size: 8px;
+    font-weight: bold;
+    color: $fill-accent-default;
+    background: rgba($fill-accent-default, 0.2);
+    padding: 1px 3px;
+    border-radius: 2px;
+    margin-left: 2px;
+  }
+}
+
+.base-classes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-4;
+  text-align: center;
+
+  p {
+    margin: 0;
+    font-family: $font-sans;
+    font-size: $font-size-xs;
+    color: $foreground-muted;
+
+    &.hint {
+      font-size: 10px;
+      margin-top: $spacing-1;
+    }
+  }
+}

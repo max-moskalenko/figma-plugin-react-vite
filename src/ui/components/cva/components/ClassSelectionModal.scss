@@ -1,0 +1,382 @@
+// ClassSelectionModal styles - Light theme with DOM sidebar
+$surface: #ffffff;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.12);
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$radius-md: 6px;
+$radius-lg: 8px;
+$font-size-xs: 11px;
+$font-size-sm: 13px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
+
+.class-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.class-modal {
+  background: $surface;
+  border-radius: $radius-lg;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  width: 720px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-3 $spacing-4;
+    border-bottom: $border-width-1 solid $stroke-neutral;
+    background: $fill-neutral-default;
+
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: $foreground-neutral;
+    }
+
+    .close-btn {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      font-size: 18px;
+      color: $foreground-muted;
+      background: transparent;
+      border: none;
+      border-radius: $radius-md;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &:hover {
+        color: $foreground-neutral;
+        background: rgba($stroke-neutral, 0.5);
+      }
+    }
+  }
+
+  .modal-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .dom-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    border-right: $border-width-1 solid $stroke-neutral;
+    background: $fill-neutral-default;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+
+    .variant-selector-section {
+      padding: $spacing-2 $spacing-3;
+      border-bottom: $border-width-1 solid $stroke-neutral;
+      
+      .sidebar-header {
+        padding: 0 0 $spacing-2 0;
+        border-bottom: none;
+      }
+    }
+
+    .variant-select {
+      width: 100%;
+      padding: $spacing-2;
+      font-family: $font-sans;
+      font-size: $font-size-xs;
+      color: $foreground-neutral;
+      background: $surface;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      cursor: pointer;
+      
+      &:focus {
+        outline: none;
+        border-color: $fill-accent-default;
+      }
+      
+      option {
+        padding: $spacing-2;
+      }
+    }
+
+    .sidebar-header {
+      padding: $spacing-2 $spacing-3;
+      font-size: $font-size-xs;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: $foreground-muted;
+      border-bottom: $border-width-1 solid $stroke-neutral;
+    }
+
+    .dom-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: $spacing-2 $spacing-3;
+      font-family: $font-mono;
+      font-size: $font-size-xs;
+      color: $foreground-neutral;
+      background: transparent;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      border-bottom: $border-width-1 solid transparent;
+      gap: $spacing-1;
+
+      .dom-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .dom-count {
+        flex-shrink: 0;
+        padding: 1px 5px;
+        font-size: 9px;
+        font-weight: 500;
+        color: $foreground-muted;
+        background: rgba(0, 0, 0, 0.05);
+        border-radius: 8px;
+      }
+
+      &:hover {
+        background: rgba($fill-accent-default, 0.05);
+      }
+
+      &.active {
+        background: rgba($fill-accent-default, 0.1);
+        color: $fill-accent-default;
+        font-weight: 500;
+
+        .dom-count {
+          color: $fill-accent-default;
+          background: rgba($fill-accent-default, 0.15);
+        }
+      }
+
+      &.has-classes {
+        .dom-count {
+          color: $fill-accent-default;
+        }
+      }
+      
+      &.variant-wrapper {
+        background: rgba($fill-accent-default, 0.03);
+        border-bottom: $border-width-1 solid $stroke-neutral;
+        font-style: italic;
+        
+        &:hover {
+          background: rgba($fill-accent-default, 0.08);
+        }
+        
+        &.active {
+          background: rgba($fill-accent-default, 0.12);
+        }
+      }
+    }
+  }
+
+  .modal-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .modal-toolbar {
+    display: flex;
+    gap: $spacing-2;
+    padding: $spacing-3;
+    border-bottom: $border-width-1 solid $stroke-neutral;
+    background: $surface;
+
+    .search-input {
+      flex: 1;
+      padding: $spacing-2 $spacing-3;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      color: $foreground-neutral;
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+
+      &:focus {
+        outline: none;
+        border-color: $fill-accent-default;
+      }
+
+      &::placeholder {
+        color: $foreground-muted;
+      }
+    }
+
+    .toolbar-btn {
+      padding: $spacing-2 $spacing-3;
+      font-family: $font-sans;
+      font-size: $font-size-xs;
+      color: $foreground-muted;
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      cursor: pointer;
+      white-space: nowrap;
+
+      &:hover {
+        color: $foreground-neutral;
+        border-color: $foreground-muted;
+      }
+    }
+  }
+
+  .modal-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: $spacing-3;
+
+    .no-classes-message {
+      padding: $spacing-4;
+      text-align: center;
+      color: $foreground-muted;
+      font-size: $font-size-sm;
+
+      p {
+        margin: $spacing-1 0;
+      }
+    }
+
+    .class-categories {
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-3;
+    }
+
+    .category-section {
+      .category-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: $spacing-1 0;
+        margin-bottom: $spacing-2;
+        font-size: $font-size-xs;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: $foreground-muted;
+        border-bottom: $border-width-1 solid $stroke-neutral;
+
+        .category-count {
+          font-weight: 400;
+          color: $foreground-muted;
+        }
+      }
+
+      .category-classes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: $spacing-1;
+      }
+
+      .class-option {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 8px;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        color: $foreground-neutral;
+        background: $fill-neutral-default;
+        border: $border-width-1 solid $stroke-neutral;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: all 0.1s ease;
+
+        input[type="checkbox"] {
+          width: 12px;
+          height: 12px;
+          margin: 0;
+          accent-color: $fill-accent-default;
+        }
+
+        &:hover {
+          border-color: rgba($fill-accent-default, 0.4);
+        }
+
+        &.selected {
+          background: rgba($fill-accent-default, 0.1);
+          border-color: rgba($fill-accent-default, 0.3);
+          color: $fill-accent-default;
+        }
+      }
+    }
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: $spacing-2;
+    padding: $spacing-3 $spacing-4;
+    border-top: $border-width-1 solid $stroke-neutral;
+    background: $fill-neutral-default;
+
+    .cancel-btn {
+      padding: $spacing-2 $spacing-4;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      font-weight: 500;
+      color: $foreground-neutral;
+      background: $surface;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      cursor: pointer;
+
+      &:hover {
+        background: $fill-neutral-default;
+      }
+    }
+
+    .save-btn {
+      padding: $spacing-2 $spacing-4;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      font-weight: 500;
+      color: white;
+      background: $fill-accent-default;
+      border: none;
+      border-radius: $radius-md;
+      cursor: pointer;
+
+      &:hover {
+        background: darken($fill-accent-default, 8%);
+      }
+    }
+  }
+}

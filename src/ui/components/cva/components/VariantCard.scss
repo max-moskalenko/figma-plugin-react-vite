@@ -1,0 +1,367 @@
+// VariantCard - Clean table layout with grouped prefix rows
+$surface: #ffffff;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.1);
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$radius-md: 6px;
+$font-size-xs: 11px;
+$font-size-sm: 13px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
+
+$shadow-card: 
+  0px 2px 4px -1px rgba(0, 0, 0, 0.04),
+  0px 4px 6px -1px rgba(0, 0, 0, 0.06);
+
+.variant-card {
+  background: $surface;
+  border: $border-width-1 solid $stroke-neutral;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+
+  &:hover {
+    border-color: rgba($fill-accent-default, 0.25);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: $spacing-1;
+    padding: $spacing-1 $spacing-2;
+    background: $fill-neutral-default;
+    border-bottom: $border-width-1 solid $stroke-neutral;
+
+    .expand-btn {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      font-size: 9px;
+      color: $foreground-muted;
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: $radius-md;
+      flex-shrink: 0;
+
+      &:hover {
+        color: $foreground-neutral;
+        background: rgba($stroke-neutral, 0.5);
+      }
+    }
+
+    .name-select, .name-input {
+      flex: 1;
+      padding: $spacing-1 $spacing-2;
+      font-family: $font-mono;
+      font-size: $font-size-sm;
+      font-weight: 600;
+      color: $fill-accent-default;
+      background: transparent;
+      border: $border-width-1 solid transparent;
+      border-radius: $radius-md;
+      cursor: pointer;
+      min-width: 0;
+
+      &:hover, &:focus {
+        background: $surface;
+        border-color: $stroke-neutral;
+        outline: none;
+      }
+
+      option {
+        font-weight: 400;
+        color: $foreground-neutral;
+        background: $surface;
+      }
+    }
+
+    .name-input {
+      border-color: $fill-accent-default;
+      cursor: text;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: $spacing-1;
+      flex-shrink: 0;
+
+      .action-btn {
+        padding: $spacing-1 $spacing-2;
+        font-family: $font-sans;
+        font-size: $font-size-xs;
+        color: $foreground-muted;
+        background: $surface;
+        border: $border-width-1 solid $stroke-neutral;
+        border-radius: $radius-md;
+        cursor: pointer;
+        white-space: nowrap;
+
+        &:hover {
+          color: $foreground-neutral;
+          border-color: rgba($foreground-muted, 0.5);
+        }
+
+        &.danger:hover {
+          color: #dc2626;
+          border-color: #dc2626;
+        }
+      }
+    }
+  }
+
+  .card-content {
+    padding: 0;
+  }
+
+  .variant-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: $font-size-xs;
+
+    th {
+      padding: $spacing-1 $spacing-2;
+      font-family: $font-sans;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: $foreground-muted;
+      text-align: left;
+      background: rgba(0, 0, 0, 0.02);
+      border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.06);
+    }
+
+    .col-value { width: 140px; }
+    .col-prefix { width: 110px; }
+    .col-classes { }
+    .col-actions { width: 30px; }
+
+    td {
+      padding: $spacing-1 $spacing-2;
+      border-bottom: $border-width-1 solid rgba(0, 0, 0, 0.04);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr.group-start td {
+      border-top: $border-width-1 solid rgba(0, 0, 0, 0.08);
+    }
+
+    tr.group-start:first-child td {
+      border-top: none;
+    }
+
+    // Value cell with rowspan
+    .value-cell {
+      background: rgba(0, 0, 0, 0.015);
+      border-right: $border-width-1 solid rgba(0, 0, 0, 0.06);
+      vertical-align: middle;
+
+      .value-content {
+        display: flex;
+        align-items: center;
+        gap: $spacing-1;
+      }
+
+      .value-select, .edit-input {
+        flex: 1;
+        padding: 3px $spacing-1;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: 500;
+        color: $foreground-neutral;
+        background: $surface;
+        border: $border-width-1 solid $stroke-neutral;
+        border-radius: $radius-md;
+        cursor: pointer;
+
+        &:hover, &:focus {
+          border-color: rgba($fill-accent-default, 0.4);
+          outline: none;
+        }
+
+        option {
+          font-weight: 400;
+        }
+      }
+
+      .edit-input {
+        border-color: $fill-accent-default;
+        cursor: text;
+      }
+
+      .remove-value-btn {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        font-size: 12px;
+        color: $foreground-muted;
+        background: transparent;
+        border: none;
+        border-radius: $radius-md;
+        cursor: pointer;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          color: #dc2626;
+          background: rgba(#dc2626, 0.08);
+        }
+      }
+    }
+
+    // Prefix cell
+    .prefix-cell {
+      .prefix-content {
+        display: flex;
+        align-items: center;
+        gap: $spacing-1;
+      }
+
+      .prefix-select, .prefix-input {
+        flex: 1;
+        padding: 3px $spacing-1;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        color: $fill-accent-default;
+        background: rgba($fill-accent-default, 0.05);
+        border: $border-width-1 solid rgba($fill-accent-default, 0.2);
+        border-radius: $radius-md;
+        cursor: pointer;
+
+        &:hover, &:focus {
+          background: rgba($fill-accent-default, 0.1);
+          border-color: rgba($fill-accent-default, 0.4);
+          outline: none;
+        }
+
+        option {
+          color: $foreground-neutral;
+          background: $surface;
+        }
+      }
+
+      .prefix-input {
+        border-color: $fill-accent-default;
+        cursor: text;
+
+        &::placeholder {
+          color: rgba($fill-accent-default, 0.5);
+        }
+      }
+
+      .add-prefix-btn {
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        font-size: 12px;
+        color: $fill-accent-default;
+        background: rgba($fill-accent-default, 0.08);
+        border: none;
+        border-radius: $radius-md;
+        cursor: pointer;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          background: rgba($fill-accent-default, 0.15);
+        }
+      }
+    }
+
+    // Classes cell
+    .classes-cell {
+      cursor: pointer;
+      transition: background 0.1s ease;
+
+      &:hover {
+        background: rgba($fill-accent-default, 0.04);
+      }
+
+      &.has-classes {
+        background: rgba($fill-accent-default, 0.02);
+      }
+
+      .class-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        align-items: center;
+
+        .chip-prefix-label {
+          padding: 1px 4px;
+          font-family: $font-mono;
+          font-size: 9px;
+          font-weight: 600;
+          color: $fill-accent-default;
+          background: rgba($fill-accent-default, 0.12);
+          border-radius: 2px;
+          margin-right: 2px;
+        }
+
+        .class-chip {
+          display: inline-flex;
+          align-items: center;
+          padding: 1px 4px;
+          font-family: $font-mono;
+          font-size: 9px;
+          color: $foreground-neutral;
+          background: rgba(0, 0, 0, 0.06);
+          border-radius: 2px;
+
+          &.more {
+            background: rgba($foreground-muted, 0.12);
+            color: $foreground-muted;
+          }
+        }
+      }
+
+      .placeholder {
+        font-family: $font-sans;
+        font-size: 10px;
+        color: $foreground-muted;
+        font-style: italic;
+      }
+    }
+
+    // Actions cell
+    .actions-cell {
+      text-align: center;
+
+      .remove-slot-btn {
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        font-size: 12px;
+        color: $foreground-muted;
+        background: transparent;
+        border: none;
+        border-radius: $radius-md;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          color: #dc2626;
+          background: rgba(#dc2626, 0.08);
+        }
+      }
+    }
+  }
+}

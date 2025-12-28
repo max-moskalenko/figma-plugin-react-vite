@@ -767,3 +767,219 @@ export function getAllVariables(): readonly VariableCollection[] {
     return [];
   }
 }
+
+/**
+ * Component property definition structure
+ */
+export interface ExtractedComponentProperty {
+  name: string;
+  type: "VARIANT" | "BOOLEAN" | "TEXT" | "INSTANCE_SWAP";
+  defaultValue: string | boolean;
+  variantOptions?: string[];
+}
+
+/**
+ * Variant property values structure
+ */
+export interface ExtractedVariantProperties {
+  variantId: string;
+  variantName: string;
+  properties: Record<string, string | boolean>;
+}
+
+/**
+ * Full component properties result
+ */
+export interface ExtractedComponentPropertiesResult {
+  definitions: ExtractedComponentProperty[];
+  variants: ExtractedVariantProperties[];
+}
+
+/**
+ * Parses variant name string into property-value pairs.
+ * Figma variant names use format: "property1=value1, property2=value2"
+ * 
+ * @param name - The variant name string from Figma
+ * @returns Object with property names as keys and their values
+ */
+function parseVariantName(name: string): Record<string, string | boolean> {
+  const properties: Record<string, string | boolean> = {};
+  
+  // Split by comma and parse each property=value pair
+  const pairs = name.split(",").map(s => s.trim());
+  
+  for (const pair of pairs) {
+    const [propName, propValue] = pair.split("=").map(s => s.trim());
+    if (propName && propValue !== undefined) {
+      // Convert boolean strings to actual booleans
+      if (propValue.toLowerCase() === "true") {
+        properties[propName] = true;
+      } else if (propValue.toLowerCase() === "false") {
+        properties[propName] = false;
+      } else {
+        properties[propName] = propValue;
+      }
+    }
+  }
+  
+  return properties;
+}
+
+/**
+ * Extracts component property definitions from a COMPONENT_SET or COMPONENT node.
+ * 
+ * For COMPONENT_SET nodes:
+ * - Extracts componentPropertyDefinitions which contains all property types
+ * - For VARIANT properties, extracts variantGroupProperties which contains all possible values
+ * - For BOOLEAN, TEXT, INSTANCE_SWAP properties, extracts from componentPropertyDefinitions
+ * 
+ * For COMPONENT nodes that are children of COMPONENT_SET:
+ * - Parses the variant name to get property values
+ * 
+ * @param node - The Figma node (COMPONENT_SET or COMPONENT)
+ * @returns ExtractedComponentPropertiesResult with definitions and variant values
+ */
+export function extractComponentProperties(
+  node: SceneNode
+): ExtractedComponentPropertiesResult | null {
+  const result: ExtractedComponentPropertiesResult = {
+    definitions: [],
+    variants: [],
+  };
+
+  try {
+    // Handle COMPONENT_SET - the main component with all variants
+    if (node.type === "COMPONENT_SET") {
+      const componentSet = node as ComponentSetNode;
+      
+      // Extract property definitions from componentPropertyDefinitions
+      if ("componentPropertyDefinitions" in componentSet) {
+        const propDefs = componentSet.componentPropertyDefinitions;
+        
+        for (const [propName, propDef] of Object.entries(propDefs)) {
+          const extractedProp: ExtractedComponentProperty = {
+            name: propName,
+            type: propDef.type as "VARIANT" | "BOOLEAN" | "TEXT" | "INSTANCE_SWAP",
+            defaultValue: propDef.defaultValue as string | boolean,
+          };
+          
+          // For VARIANT type, extract variantOptions
+          if (propDef.type === "VARIANT" && "variantOptions" in propDef) {
+            extractedProp.variantOptions = propDef.variantOptions as string[];
+          }
+          
+          result.definitions.push(extractedProp);
+        }
+      }
+      
+      // Also check variantGroupProperties for variant values (older API)
+      if ("variantGroupProperties" in componentSet) {
+        const variantGroups = (componentSet as any).variantGroupProperties;
+        if (variantGroups) {
+          for (const [propName, propData] of Object.entries(variantGroups as Record<string, any>)) {
+            // Check if this property is already in definitions
+            const existingDef = result.definitions.find(d => d.name === propName);
+            if (!existingDef) {
+              result.definitions.push({
+                name: propName,
+                type: "VARIANT",
+                defaultValue: propData.values?.[0] || "",
+                variantOptions: propData.values || [],
+              });
+            } else if (!existingDef.variantOptions && propData.values) {
+              existingDef.variantOptions = propData.values;
+            }
+          }
+        }
+      }
+      
+      // Extract variant property values from each child component
+      if ("children" in componentSet && componentSet.children) {
+        for (const child of componentSet.children) {
+          if (child.type === "COMPONENT") {
+            const variantProps = parseVariantName(child.name);
+            result.variants.push({
+              variantId: child.id,
+              variantName: child.name,
+              properties: variantProps,
+            });
+          }
+        }
+      }
+    }
+    // Handle individual COMPONENT (might be a variant or standalone)
+    else if (node.type === "COMPONENT") {
+      const component = node as ComponentNode;
+      
+      // Check if this component is part of a COMPONENT_SET
+      if (component.parent && component.parent.type === "COMPONENT_SET") {
+        // Get definitions from parent
+        const parentResult = extractComponentProperties(component.parent);
+        if (parentResult) {
+          result.definitions = parentResult.definitions;
+        }
+        
+        // Parse this variant's properties from its name
+        const variantProps = parseVariantName(component.name);
+        result.variants.push({
+          variantId: component.id,
+          variantName: component.name,
+          properties: variantProps,
+        });
+      } else {
+        // Standalone component - extract its own property definitions
+        if ("componentPropertyDefinitions" in component) {
+          const propDefs = component.componentPropertyDefinitions;
+          
+          for (const [propName, propDef] of Object.entries(propDefs)) {
+            result.definitions.push({
+              name: propName,
+              type: propDef.type as "VARIANT" | "BOOLEAN" | "TEXT" | "INSTANCE_SWAP",
+              defaultValue: propDef.defaultValue as string | boolean,
+            });
+          }
+        }
+      }
+    }
+    // Handle INSTANCE - get properties from the instance
+    else if (node.type === "INSTANCE") {
+      const instance = node as InstanceNode;
+      
+      // Get the main component to extract definitions
+      if (instance.mainComponent) {
+        const mainResult = extractComponentProperties(instance.mainComponent);
+        if (mainResult) {
+          result.definitions = mainResult.definitions;
+        }
+      }
+      
+      // Extract current instance property values
+      if ("componentProperties" in instance) {
+        const instanceProps = instance.componentProperties;
+        const properties: Record<string, string | boolean> = {};
+        
+        for (const [propName, propValue] of Object.entries(instanceProps)) {
+          if (typeof propValue === "object" && "value" in propValue) {
+            properties[propName] = propValue.value as string | boolean;
+          }
+        }
+        
+        result.variants.push({
+          variantId: instance.id,
+          variantName: instance.name,
+          properties,
+        });
+      }
+    }
+    
+    // Return null if no properties found
+    if (result.definitions.length === 0 && result.variants.length === 0) {
+      return null;
+    }
+    
+    return result;
+  } catch (e) {
+    console.warn("Error extracting component properties:", e);
+    return null;
+  }
+}

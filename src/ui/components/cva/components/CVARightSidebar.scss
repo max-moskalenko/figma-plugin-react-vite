@@ -1,0 +1,313 @@
+// CVARightSidebar - Light theme matching extractor
+// Shared variables
+$surface: #f8fafc;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.2);
+$foreground-on-accent: #fafafa;
+$foreground-neutral: #09090b;
+$foreground-muted: #848484;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-2-5: 10px;
+$spacing-3: 12px;
+$radius-md: 6px;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-leading-4: 16px;
+$font-leading-5: 20px;
+$font-weight-normal: 400;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+$font-tracking-normal: 0px;
+
+.cva-right-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding-left: $spacing-2;
+
+  .selection-summary {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-2-5;
+    width: 100%;
+    min-height: 0;
+    overflow: hidden;
+
+    .component-name {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-1;
+      font-family: $font-mono;
+      font-size: $font-size-sm;
+      font-weight: $font-weight-normal;
+      line-height: $font-leading-5;
+      color: $foreground-neutral;
+      letter-spacing: $font-tracking-normal;
+      width: 100%;
+
+      .component-type-badge {
+        display: inline-block;
+        align-self: flex-start;
+        font-family: $font-sans;
+        font-size: 9px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: $foreground-on-accent;
+        background-color: $fill-accent-default;
+        padding: 2px 6px;
+        border-radius: 4px;
+        line-height: 1.2;
+      }
+
+      .component-name-input {
+        width: 100%;
+        padding: $spacing-1;
+        font-family: $font-mono;
+        font-size: $font-size-sm;
+        font-weight: $font-weight-normal;
+        line-height: $font-leading-5;
+        color: $foreground-neutral;
+        background: transparent;
+        border: $border-width-1 solid transparent;
+        border-radius: $radius-md;
+        box-sizing: border-box;
+
+        &:hover {
+          border-color: $stroke-neutral;
+        }
+
+        &:focus {
+          outline: none;
+          border-color: $fill-accent-default;
+          background: $fill-neutral-default;
+        }
+      }
+    }
+
+    .format-toggle {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-2;
+      width: 100%;
+
+      .format-toggle-label {
+        margin: 0;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-normal;
+        line-height: $font-leading-4;
+        color: $foreground-muted;
+        letter-spacing: $font-tracking-normal;
+      }
+
+      .format-options {
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-2;
+        width: 100%;
+
+        &.format-options-horizontal {
+          flex-direction: row;
+          gap: $spacing-1;
+        }
+
+        .format-option {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: $spacing-1;
+          padding: $spacing-1;
+          background: $fill-neutral-default;
+          border: $border-width-1 solid $stroke-neutral;
+          border-radius: $radius-md;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: $font-mono;
+          font-size: $font-size-xs;
+          font-weight: $font-weight-normal;
+          line-height: $font-leading-4;
+          color: $foreground-neutral;
+          letter-spacing: $font-tracking-normal;
+
+          &:hover {
+            opacity: 0.9;
+          }
+
+          input[type="radio"] {
+            display: none;
+          }
+
+          span {
+            user-select: none;
+          }
+
+          &.format-option-checked {
+            background: $fill-accent-default;
+            color: $foreground-on-accent;
+            border-color: $fill-accent-default;
+
+            span {
+              color: $foreground-on-accent;
+            }
+          }
+        }
+      }
+    }
+
+    .variables-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-3;
+      width: 100%;
+      min-height: 0;
+      overflow: hidden;
+
+      .variables-title {
+        flex-shrink: 0;
+        margin: 0;
+        font-family: $font-mono;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-normal;
+        line-height: $font-leading-4;
+        color: $foreground-muted;
+        letter-spacing: $font-tracking-normal;
+      }
+
+      .variables-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-1;
+        width: 100%;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        .variable-item {
+          flex-shrink: 0;
+          margin: 0;
+          padding: $spacing-1;
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          box-sizing: border-box;
+          border-radius: $radius-md;
+
+          p {
+            margin: 0;
+            font-family: $font-mono;
+            font-size: 10px;
+            font-weight: $font-weight-normal;
+            line-height: 1.2;
+            color: $foreground-neutral;
+            letter-spacing: $font-tracking-normal;
+          }
+
+          .variable-value {
+            font-family: $font-mono;
+            font-size: 10px;
+            font-weight: 600;
+            color: $foreground-neutral;
+            background: rgba($stroke-neutral, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+          }
+        }
+      }
+    }
+
+    .import-btn {
+      flex-shrink: 0;
+      width: 100%;
+      padding: $spacing-2;
+      font-family: $font-sans;
+      font-size: $font-size-xs;
+      font-weight: 500;
+      color: $fill-accent-default;
+      background: rgba($fill-accent-default, 0.1);
+      border: $border-width-1 solid rgba($fill-accent-default, 0.3);
+      border-radius: $radius-md;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: rgba($fill-accent-default, 0.2);
+      }
+    }
+  }
+
+  .action-buttons {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    gap: $spacing-2;
+    width: 100%;
+    margin-top: $spacing-2-5;
+
+    .button {
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      display: flex;
+      gap: $spacing-1;
+      align-items: center;
+      justify-content: center;
+      padding: $spacing-1 $spacing-2;
+      flex: 1;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      font-weight: $font-weight-normal;
+      line-height: $font-leading-5;
+      letter-spacing: $font-tracking-normal;
+      white-space: nowrap;
+
+      &:hover:not(:disabled) {
+        opacity: 0.9;
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      p {
+        margin: 0;
+        line-height: $font-leading-5;
+      }
+
+      &.button-primary {
+        background: $fill-accent-default;
+        color: $foreground-on-accent;
+        border-color: $stroke-neutral;
+
+        p {
+          color: $foreground-on-accent;
+        }
+      }
+
+      &.button-secondary {
+        background: $fill-neutral-default;
+        color: $foreground-neutral;
+        border-color: $stroke-neutral;
+
+        p {
+          color: $foreground-neutral;
+        }
+      }
+    }
+  }
+}

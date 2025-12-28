@@ -1,0 +1,61 @@
+// CodeMode - matches extractor code display style
+// Shared variables
+$spacing-3: 12px;
+$radius-md: 6px;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+
+// Dark theme for code display (matching extractor)
+$code-bg: #1e1e2e;
+$code-text: #cdd6f4;
+$code-text-muted: #6c7086;
+$code-border: #313244;
+
+.code-mode {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+  background: $code-bg;
+  border-radius: $radius-md;
+}
+
+.code-preview {
+  flex: 1;
+  margin: 0;
+  padding: $spacing-3;
+  overflow: auto;
+  font-family: $font-mono;
+  font-size: 12px;
+  line-height: 1.6;
+  color: $code-text;
+  background: $code-bg;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  tab-size: 2;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $code-border;
+    border-radius: 4px;
+
+    &:hover {
+      background: $code-text-muted;
+    }
+  }
+
+  code {
+    display: block;
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+  }
+}

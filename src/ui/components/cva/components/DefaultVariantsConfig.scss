@@ -1,0 +1,87 @@
+// DefaultVariantsConfig - Simple card, no extra wrappers
+// Variables
+$surface: #ffffff;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.12);
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+$border-width-1: 1px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$radius-md: 6px;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+
+$shadow-card: 
+  0px 2px 4px -1px rgba(0, 0, 0, 0.04),
+  0px 4px 6px -1px rgba(0, 0, 0, 0.06);
+
+.default-variants-config {
+  background: $surface;
+  border: $border-width-1 solid $stroke-neutral;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+
+  .section-header {
+    padding: $spacing-2 $spacing-3;
+    background: rgba($stroke-neutral, 0.06);
+    border-bottom: $border-width-1 solid $stroke-neutral;
+
+    h3 {
+      margin: 0;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      font-weight: 600;
+      color: $foreground-neutral;
+    }
+  }
+
+  .default-variants-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-2;
+    padding: $spacing-3;
+  }
+
+  .default-variant-item {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+    padding: $spacing-2 $spacing-3;
+    background: $fill-neutral-default;
+    border: $border-width-1 solid $stroke-neutral;
+    border-radius: $radius-md;
+
+    .prop-name {
+      font-family: $font-mono;
+      font-size: $font-size-xs;
+      font-weight: 500;
+      color: $foreground-neutral;
+    }
+
+    select {
+      padding: $spacing-2;
+      font-family: $font-mono;
+      font-size: $font-size-xs;
+      color: $foreground-neutral;
+      background: $surface;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      cursor: pointer;
+      min-width: 100px;
+
+      &:focus {
+        outline: none;
+        border-color: $fill-accent-default;
+      }
+
+      option {
+        background: $fill-neutral-default;
+        color: $foreground-neutral;
+      }
+    }
+  }
+}

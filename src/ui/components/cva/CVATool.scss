@@ -1,0 +1,24 @@
+// CVA Tool - Light theme matching extractor
+// Shared variables
+$surface: #f8fafc;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.2);
+$foreground-on-accent: #fafafa;
+$foreground-neutral: #09090b;
+$foreground-muted: #848484;
+$border-width-1: 1px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$radius-lg: 8px;
+
+.cva-main-content {
+  background: transparent;
+  flex: 1;
+  min-width: 300px;
+  min-height: 0;
+  padding: $spacing-2 $spacing-3;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

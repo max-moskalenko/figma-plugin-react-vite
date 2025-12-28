@@ -57,13 +57,22 @@ $shadow-lg:
   border: $border-width-1 solid $stroke-neutral;
   display: flex;
   gap: 0;
-  padding: $spacing-6;
   height: 100vh;
   width: 100%;
   min-width: 600px;
   max-width: 1600px;
   box-sizing: border-box;
   overflow: hidden;
+
+  // Tool content wrapper - contains either extractor or CVA tool
+  .tool-content {
+    flex: 1;
+    display: flex;
+    gap: 0;
+    padding: $spacing-6;
+    min-width: 0;
+    overflow: hidden;
+  }
 }
 
 // Window resize handle (bottom-right corner)
@@ -705,6 +714,65 @@ $code-error: #f38ba8;
           width: 100%;
         }
       }
+    }
+  }
+}
+
+// CVA Mapping Tool Styles
+.cva-tool-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cva-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $code-bg;
+  border: $border-width-1 solid $code-border;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-lg;
+
+  .cva-placeholder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: $spacing-4;
+    text-align: center;
+    padding: $spacing-6;
+    max-width: 400px;
+
+    svg {
+      color: $code-text-muted;
+      opacity: 0.5;
+    }
+
+    h2 {
+      margin: 0;
+      font-family: $font-sans;
+      font-size: 18px;
+      font-weight: 600;
+      color: $code-text;
+    }
+
+    p {
+      margin: 0;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      color: $code-text-muted;
+      line-height: 1.5;
+    }
+
+    .cva-hint {
+      font-size: $font-size-xs;
+      color: $fill-accent-default;
+      padding: $spacing-2 $spacing-3;
+      background: rgba($fill-accent-default, 0.1);
+      border-radius: $radius-md;
     }
   }
 }

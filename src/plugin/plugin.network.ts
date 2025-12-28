@@ -1,6 +1,6 @@
 import { PLUGIN, UI, AnnotationFormat } from "@common/networkSides";
 import { traverseSelection } from "@plugin/extractors/componentTraverser";
-import { extractStyles, getAllVariables } from "@plugin/extractors/styleExtractor";
+import { extractStyles, getAllVariables, extractComponentProperties } from "@plugin/extractors/styleExtractor";
 import { generateDOM } from "@common/domGenerator";
 import { generateTailwindDOM } from "@common/tailwindDomGenerator";
 import { generateRawJSON } from "@common/rawJsonGenerator";
@@ -355,6 +355,29 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
       ...rawJson.usedVariables,
     ])].sort();
 
+    // Extract component properties if available
+    // Use the original selection (which may be a COMPONENT_SET) for property extraction
+    let componentProperties = null;
+    for (const node of selectedNodes) {
+      const props = extractComponentProperties(node);
+      if (props) {
+        componentProperties = {
+          definitions: props.definitions.map(d => ({
+            name: d.name,
+            type: d.type,
+            defaultValue: d.defaultValue,
+            variantOptions: d.variantOptions,
+          })),
+          variants: props.variants.map(v => ({
+            variantId: v.variantId,
+            variantName: v.variantName,
+            properties: v.properties,
+          })),
+        };
+        break; // Use the first node with component properties
+      }
+    }
+
     const result = {
       // CSS format output
       css: {
@@ -378,6 +401,7 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
       componentName: componentName,
       variableMappings: variableMappings.length > 0 ? variableMappings : undefined,
       usedVariables: allUsedVariables.length > 0 ? allUsedVariables : undefined,
+      componentProperties: componentProperties || undefined,
     };
     
     return result;

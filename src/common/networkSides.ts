@@ -16,14 +16,39 @@ interface FormatOutput {
   usedVariables: string[];
 }
 
+// Component property types from Figma
+export type ComponentPropertyType = "VARIANT" | "BOOLEAN" | "TEXT" | "INSTANCE_SWAP";
+
+// Component property definition
+export interface ComponentPropertyDefinition {
+  name: string;
+  type: ComponentPropertyType;
+  defaultValue: string | boolean;
+  variantOptions?: string[]; // Only for VARIANT type
+}
+
+// Per-variant property values
+export interface VariantPropertyValues {
+  variantId: string;
+  variantName: string;
+  properties: Record<string, string | boolean>;
+}
+
+// Component properties extraction result
+export interface ComponentPropertiesResult {
+  definitions: ComponentPropertyDefinition[];
+  variants: VariantPropertyValues[];
+}
+
 // Multi-format extraction result
-interface MultiFormatExtractionResult {
+export interface MultiFormatExtractionResult {
   css: FormatOutput;
   tailwind: FormatOutput;
   raw: FormatOutput;
   componentName: string;
   variableMappings?: Array<{ name: string; value: any }>;
   usedVariables?: string[];
+  componentProperties?: ComponentPropertiesResult;
 }
 
 // Selection info returned by getSelectionName

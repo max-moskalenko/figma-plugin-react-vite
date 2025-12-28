@@ -1,0 +1,281 @@
+// CompoundVariantsConfig - Simple card, no extra wrappers
+// Variables
+$surface: #ffffff;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.12);
+$foreground-on-accent: #fafafa;
+$foreground-neutral: #09090b;
+$foreground-muted: #71717a;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$radius-md: 6px;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$font-mono: "Roboto Mono", "Monaco", "Menlo", "Ubuntu Mono", "Consolas", monospace;
+
+$shadow-card: 
+  0px 2px 4px -1px rgba(0, 0, 0, 0.04),
+  0px 4px 6px -1px rgba(0, 0, 0, 0.06);
+
+.compound-variants-config {
+  background: $surface;
+  border: $border-width-1 solid $stroke-neutral;
+  border-radius: $radius-md;
+  box-shadow: $shadow-card;
+
+  .compound-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: $spacing-2 $spacing-3;
+    background: rgba($stroke-neutral, 0.06);
+    border-bottom: $border-width-1 solid $stroke-neutral;
+
+    h4 {
+      margin: 0;
+      font-family: $font-sans;
+      font-size: $font-size-sm;
+      font-weight: 600;
+      color: $foreground-neutral;
+    }
+
+    .add-btn {
+      padding: $spacing-1 $spacing-2;
+      font-family: $font-sans;
+      font-size: $font-size-xs;
+      font-weight: 500;
+      color: $fill-accent-default;
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $fill-accent-default;
+      border-radius: $radius-md;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background: rgba($fill-accent-default, 0.1);
+      }
+    }
+  }
+
+  .no-compound {
+    padding: $spacing-3;
+    text-align: center;
+
+    p {
+      margin: 0;
+      font-family: $font-sans;
+      font-size: $font-size-xs;
+      color: $foreground-muted;
+
+      &.hint {
+        font-size: 10px;
+        margin-top: $spacing-1;
+      }
+    }
+  }
+
+  .compound-rules {
+    padding: $spacing-3;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-3;
+
+    .compound-rule {
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+
+      .rule-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: $spacing-2 $spacing-3;
+        background: rgba($stroke-neutral, 0.05);
+        border-bottom: $border-width-1 solid $stroke-neutral;
+
+        .rule-label {
+          font-family: $font-mono;
+          font-size: $font-size-xs;
+          font-weight: 600;
+          color: $foreground-neutral;
+        }
+
+        .remove-rule-btn {
+          width: 22px;
+          height: 22px;
+          padding: 0;
+          font-size: 12px;
+          color: $foreground-muted;
+          background: $fill-neutral-default;
+          border: $border-width-1 solid $stroke-neutral;
+          border-radius: $radius-md;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.15s ease;
+
+          &:hover {
+            color: #dc2626;
+            border-color: #dc2626;
+          }
+        }
+      }
+
+      .conditions {
+        padding: $spacing-3;
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-2;
+
+        .conditions-label {
+          font-family: $font-sans;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: $foreground-muted;
+        }
+
+        .condition-row {
+          display: flex;
+          align-items: center;
+          gap: $spacing-2;
+          flex-wrap: wrap;
+
+          .and-label {
+            font-family: $font-mono;
+            font-size: 10px;
+            font-weight: 600;
+            color: $fill-accent-default;
+            padding: 2px 6px;
+            background: rgba($fill-accent-default, 0.1);
+            border-radius: 3px;
+          }
+
+          .condition-select {
+            padding: $spacing-1 $spacing-2;
+            font-family: $font-mono;
+            font-size: $font-size-xs;
+            color: $foreground-neutral;
+            background: $fill-neutral-default;
+            border: $border-width-1 solid $stroke-neutral;
+            border-radius: $radius-md;
+            cursor: pointer;
+            min-width: 120px;
+
+            &:focus {
+              outline: none;
+              border-color: $fill-accent-default;
+            }
+
+            &:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
+            }
+
+            option {
+              background: $fill-neutral-default;
+              color: $foreground-neutral;
+            }
+          }
+
+          .equals {
+            font-family: $font-mono;
+            font-size: $font-size-sm;
+            font-weight: 600;
+            color: $foreground-muted;
+          }
+
+          .remove-condition-btn {
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: $foreground-muted;
+            background: $fill-neutral-default;
+            border: $border-width-1 solid $stroke-neutral;
+            border-radius: $radius-md;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+
+            &:hover:not(:disabled) {
+              color: #dc2626;
+              border-color: #dc2626;
+            }
+
+            &:disabled {
+              opacity: 0.3;
+              cursor: not-allowed;
+            }
+          }
+        }
+
+        .add-condition-btn {
+          align-self: flex-start;
+          padding: $spacing-1 $spacing-2;
+          font-family: $font-sans;
+          font-size: 10px;
+          font-weight: 500;
+          color: $foreground-muted;
+          background: transparent;
+          border: $border-width-1 dashed $stroke-neutral;
+          border-radius: $radius-md;
+          cursor: pointer;
+          transition: all 0.15s ease;
+
+          &:hover {
+            color: $fill-accent-default;
+            border-color: $fill-accent-default;
+          }
+        }
+      }
+
+      .classes-row {
+        padding: 0 $spacing-3 $spacing-3;
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-1;
+
+        .classes-label {
+          font-family: $font-sans;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: $foreground-muted;
+        }
+
+        .classes-input {
+          width: 100%;
+          padding: $spacing-2;
+          font-family: $font-mono;
+          font-size: $font-size-xs;
+          color: $foreground-neutral;
+          background: $fill-neutral-default;
+          border: $border-width-1 solid $stroke-neutral;
+          border-radius: $radius-md;
+          box-sizing: border-box;
+
+          &:focus {
+            outline: none;
+            border-color: $fill-accent-default;
+          }
+
+          &::placeholder {
+            color: $foreground-muted;
+          }
+        }
+      }
+    }
+  }
+}

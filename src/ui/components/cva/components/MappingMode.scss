@@ -1,0 +1,113 @@
+// MappingMode - Simple vertical flow, all scrolls together
+// Variables
+$surface: #f8fafc;
+$fill-neutral-default: #f8fafc;
+$fill-accent-default: #2b7fff;
+$stroke-neutral: rgba(24, 24, 27, 0.2);
+$foreground-on-accent: #fafafa;
+$foreground-neutral: #09090b;
+$foreground-muted: #848484;
+$border-width-1: 1px;
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$radius-md: 6px;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+.mapping-mode {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-3;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  // Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $stroke-neutral;
+    border-radius: 4px;
+
+    &:hover {
+      background: $foreground-muted;
+    }
+  }
+
+  // Direct children - no wrapper needed
+  > * {
+    flex-shrink: 0;
+  }
+}
+
+.variants-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-2 0;
+  margin-top: $spacing-2;
+
+  h3 {
+    margin: 0;
+    font-family: $font-sans;
+    font-size: $font-size-sm;
+    font-weight: 600;
+    color: $foreground-neutral;
+  }
+
+  .variants-actions {
+    display: flex;
+    align-items: center;
+    gap: $spacing-2;
+  }
+}
+
+.add-variant-btn {
+  padding: $spacing-1 $spacing-3;
+  font-family: $font-sans;
+  font-size: $font-size-xs;
+  font-weight: 500;
+  color: $foreground-on-accent;
+  background: $fill-accent-default;
+  border: none;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.no-variants {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-4;
+  text-align: center;
+  background: $surface;
+  border: $border-width-1 dashed $stroke-neutral;
+  border-radius: $radius-md;
+
+  p {
+    margin: 0;
+    font-family: $font-sans;
+    font-size: $font-size-sm;
+    color: $foreground-muted;
+
+    &.hint {
+      font-size: $font-size-xs;
+      margin-top: $spacing-2;
+    }
+  }
+}

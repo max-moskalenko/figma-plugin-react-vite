@@ -1,4 +1,4 @@
-import { PLUGIN, SelectionInfo } from "@common/networkSides";
+import { PLUGIN, SelectionInfo, MultiFormatExtractionResult, AnnotationFormat } from "@common/networkSides";
 import { UI_CHANNEL } from "@ui/app.network";
 import { NetworkError } from "monorepo-networker";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -6,29 +6,16 @@ import JSZip from "jszip";
 
 import "@ui/styles/main.scss";
 import "./app.scss";
-
-// Individual format output structure
-interface FormatOutput {
-  html?: string;
-  json?: string;
-  stylesheet: string;
-  usedVariables: string[];
-}
-
-// Multi-format extraction result from the plugin
-interface MultiFormatExtractionResult {
-  css: FormatOutput;
-  tailwind: FormatOutput;
-  raw: FormatOutput;
-  componentName: string;
-  variableMappings?: Array<{ name: string; value: any }>;
-  usedVariables?: string[];
-}
+import { LeftNavigation, ToolType } from "@ui/components/shared/LeftNavigation";
+import { CVATool } from "@ui/components/cva";
 
 type OutputFormat = "css" | "tailwind" | "raw";
-type AnnotationFormat = "html" | "tsx" | "none";
 
 function App() {
+  // Navigation state
+  const [activeToolItem, setActiveToolItem] = useState<ToolType>("extractor");
+
+  // Extractor tool state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MultiFormatExtractionResult | null>(null);
@@ -475,8 +462,9 @@ function App() {
     return escapedCode;
   };
 
-  return (
-    <div className="figma-plugin">
+  // Render Extractor Tool content
+  const renderExtractorTool = () => (
+    <>
       <div className="code-snippet">
         <div className="code-content">
           {error ? (
@@ -684,6 +672,25 @@ function App() {
             )}
           </div>
         </div>
+      </div>
+    </>
+  );
+
+  // Render CVA Mapping Tool
+  const renderCVAMappingTool = () => (
+    <CVATool extractorResult={result} />
+  );
+
+  return (
+    <div className="figma-plugin">
+      <LeftNavigation 
+        activeToolItem={activeToolItem} 
+        onToolChange={setActiveToolItem} 
+      />
+      
+      <div className="tool-content">
+        {activeToolItem === "extractor" && renderExtractorTool()}
+        {activeToolItem === "cva-mapping" && renderCVAMappingTool()}
       </div>
       
       <div 
