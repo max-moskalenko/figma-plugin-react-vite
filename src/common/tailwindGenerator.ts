@@ -174,12 +174,16 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 /**
- * Converts fill (background) properties to Tailwind background classes.
+ * Converts fill (background) properties to Tailwind classes with semantic prefix detection.
  * 
  * REMAPPING LOGIC:
  * 1. With Variable:
  *    - Converts Figma variable name to Tailwind class name (e.g., "fill/neutral/default" → "fill-neutral-default")
- *    - Generates class: bg-{variableName} (e.g., "bg-fill-neutral-default")
+ *    - SEMANTIC PREFIX DETECTION: Analyzes variable name to determine correct prefix:
+ *      * Variables with "foreground", "text-color", "text/" → text-{variableName}
+ *      * Variables with "stroke", "border-color", "border/" → border-{variableName}
+ *      * Variables with "fill", "background", "bg-" → bg-{variableName}
+ *    - This prevents semantic errors like "bg-foreground-neutral" (foreground should be text-)
  *    - Stores resolved color value in variableMap for Tailwind config
  *    - Handles opacity: if opacity < 1, stores as rgba() in variableMap
  * 
@@ -192,12 +196,11 @@ function rgbToHex(r: number, g: number, b: number): string {
  *    - Radial gradients: bg-[radial-gradient(...)]
  *    - Gradient stops converted from RGB (0-1) to hex format
  * 
- * NOTE: For TEXT nodes, this function generates background classes, but they are
- * converted to text color classes (text-*) in tailwindDomGenerator.ts
+ * NOTE: For TEXT nodes, additional conversion happens in tailwindDomGenerator.ts
  * 
  * @param fills - Array of extracted fill objects with type, color, opacity, and optional variable
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of Tailwind class strings (e.g., ["bg-fill-neutral-default", "bg-[#ff0000]"])
+ * @returns Array of Tailwind class strings (e.g., ["bg-fill-neutral-default", "text-foreground-neutral"])
  */
 export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] {
   if (!fills || fills.length === 0) return [];
@@ -220,7 +223,24 @@ export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] 
       } else {
         variableMap[fill.variable] = color;
       }
-      classes.push(`bg-${tailwindVarName}`);
+      
+      // SEMANTIC PREFIX DETECTION:
+      // Detect the correct Tailwind prefix based on variable name semantics
+      // to avoid issues like "bg-foreground-*" when foreground should be text color
+      const varNameLower = fill.variable.toLowerCase();
+      let prefix = 'bg-'; // Default to background
+      
+      if (varNameLower.includes('foreground') || varNameLower.includes('text-color') || varNameLower.startsWith('text/')) {
+        // Variables with "foreground" or "text" semantics should use text- prefix
+        prefix = 'text-';
+      } else if (varNameLower.includes('stroke') || varNameLower.includes('border-color') || varNameLower.startsWith('border/')) {
+        // Variables with "stroke" or "border" semantics should use border- prefix
+        // Note: This shouldn't normally happen for fills, but handle it just in case
+        prefix = 'border-';
+      }
+      // Otherwise keep default 'bg-' for fill/background variables
+      
+      classes.push(`${prefix}${tailwindVarName}`);
     } else {
       // For non-variable colors, use arbitrary values: bg-[#hex]
       const color = fill.color;
@@ -266,6 +286,7 @@ export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] 
  *    - With Variable: border-{variableName} (e.g., "border-fill-neutral-default")
  *    - Without Variable: border-[#{hex}] or border-[rgba(r,g,b,opacity)]
  *    - Stores color value in variableMap for CSS variable definition
+ *    - For individual sides: border-{side}-{variableName} (e.g., "border-b-fill-neutral-default")
  * 
  * 2. Border Width:
  *    - With Variable: Extracts scale value from variable name (e.g., "border-width-1" → "1")
@@ -277,6 +298,7 @@ export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] 
  *      - 4px → border-4
  *      - 8px → border-8
  *      - Others → border-[{value}px]
+ *    - For individual sides: border-{side}-{value} (e.g., "border-b-2", "border-l-1")
  * 
  * 3. Border Style:
  *    - Determined by strokeDashArray:
@@ -284,14 +306,22 @@ export function fillsToTailwind(fills: any, variableMap: VariableMap): string[] 
  *      - Other dash patterns → border-dashed
  *      - No dash array → solid (default, no class needed)
  * 
+ * 4. Individual Sides:
+ *    - When hasIndividualStrokes is true, generates side-specific classes:
+ *      - border-t-{width}, border-r-{width}, border-b-{width}, border-l-{width}
+ *      - border-t-{color}, border-r-{color}, border-b-{color}, border-l-{color}
+ *    - Only generates classes for sides that have strokes
+ * 
  * @param strokes - Extracted stroke object containing:
  *   - strokes: Array of stroke paint objects with color, opacity, and optional variable
  *   - strokeWeight: Border width in pixels
  *   - strokeWeightVariable: Optional variable name for stroke weight
  *   - strokeAlign: Border alignment (CENTER, INSIDE, OUTSIDE)
  *   - strokeDashArray: Optional array for dashed/dotted borders
+ *   - hasIndividualStrokes: Boolean indicating if sides have different strokes
+ *   - individualSides: Object with top, right, bottom, left weights for individual sides
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of Tailwind class strings (e.g., ["border-fill-neutral-default", "border-2", "border-dashed"])
+ * @returns Array of Tailwind class strings (e.g., ["border-b-fill-neutral-default", "border-b-2", "border-l-1"])
  */
 export function strokesToTailwind(strokes: any, variableMap: VariableMap): string[] {
   if (!strokes || !strokes.strokes || strokes.strokes.length === 0) return [];
@@ -302,58 +332,132 @@ export function strokesToTailwind(strokes: any, variableMap: VariableMap): strin
   const align = strokes.strokeAlign || "CENTER";
 
   if (stroke.type === "SOLID") {
-    // Handle stroke color variable
-    if (stroke.variable) {
-      const tailwindVarName = figmaVariableToTailwindClass(stroke.variable);
-      const color = stroke.color;
-      const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
-      if (opacity < 1) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-        variableMap[stroke.variable] = `rgba(${r}, ${g}, ${b}, ${opacity})`;
-      } else {
-        variableMap[stroke.variable] = color;
-      }
-      classes.push(`border-${tailwindVarName}`);
-    } else {
-      const color = stroke.color;
-      const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
-      if (opacity < 1) {
-        const r = parseInt(color.slice(1, 3), 16);
-        const g = parseInt(color.slice(3, 5), 16);
-        const b = parseInt(color.slice(5, 7), 16);
-        classes.push(`border-[rgba(${r},${g},${b},${opacity})]`);
-      } else {
-        classes.push(`border-[${color}]`);
-      }
-    }
-
-    // Handle strokeWeight variable
-    if (strokes.strokeWeightVariable) {
-      const borderWidthValue = extractBorderWidthValue(strokes.strokeWeightVariable);
-      if (borderWidthValue) {
-        // Use Tailwind border width class - always use explicit format (border-1, border-2, etc.)
-        classes.push(`border-${borderWidthValue}`);
-      } else {
-        // Fallback to arbitrary value
-        const tailwindVarName = figmaVariableToTailwindClass(strokes.strokeWeightVariable);
-        variableMap[strokes.strokeWeightVariable] = `${weight}px`;
-        classes.push(`border-[var(--${tailwindVarName})]`);
-      }
-    } else {
-      // Use Tailwind border width utilities - always use explicit format (border-1, border-2, etc.)
-      const borderWidthMap: { [key: number]: string } = {
-        1: "border-1",
-        2: "border-2",
-        3: "border-3",
-        4: "border-4",
-        8: "border-8",
+    // Check if we have individual side strokes
+    if (strokes.hasIndividualStrokes && strokes.individualSides) {
+      // Generate side-specific border classes
+      const sides = strokes.individualSides;
+      const sideMap: { [key: string]: string } = {
+        top: "t",
+        right: "r",
+        bottom: "b",
+        left: "l",
       };
-      const borderClass = borderWidthMap[weight] || `border-[${weight}px]`;
-      classes.push(borderClass);
-    }
+      
+      // Helper to get border width class for a side
+      const getBorderWidthClass = (sideWeight: number, sidePrefix: string) => {
+        if (strokes.strokeWeightVariable) {
+          const borderWidthValue = extractBorderWidthValue(strokes.strokeWeightVariable);
+          if (borderWidthValue) {
+            return `border-${sidePrefix}-${borderWidthValue}`;
+          } else {
+            const tailwindVarName = figmaVariableToTailwindClass(strokes.strokeWeightVariable);
+            variableMap[strokes.strokeWeightVariable] = `${sideWeight}px`;
+            return `border-${sidePrefix}-[var(--${tailwindVarName})]`;
+          }
+        } else {
+          const borderWidthMap: { [key: number]: string } = {
+            1: "1",
+            2: "2",
+            3: "3",
+            4: "4",
+            8: "8",
+          };
+          const widthValue = borderWidthMap[sideWeight] || `[${sideWeight}px]`;
+          return `border-${sidePrefix}-${widthValue}`;
+        }
+      };
+      
+      // Helper to get border color class for a side
+      const getBorderColorClass = (sidePrefix: string) => {
+        if (stroke.variable) {
+          const tailwindVarName = figmaVariableToTailwindClass(stroke.variable);
+          const color = stroke.color;
+          const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
+          if (opacity < 1) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            variableMap[stroke.variable] = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+          } else {
+            variableMap[stroke.variable] = color;
+          }
+          return `border-${sidePrefix}-${tailwindVarName}`;
+        } else {
+          const color = stroke.color;
+          const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
+          if (opacity < 1) {
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            return `border-${sidePrefix}-[rgba(${r},${g},${b},${opacity})]`;
+          } else {
+            return `border-${sidePrefix}-[${color}]`;
+          }
+        }
+      };
+      
+      // Generate classes for each side that has a stroke
+      for (const [sideName, sidePrefix] of Object.entries(sideMap)) {
+        const sideWeight = sides[sideName as keyof typeof sides];
+        if (sideWeight !== undefined) {
+          classes.push(getBorderWidthClass(sideWeight, sidePrefix));
+          classes.push(getBorderColorClass(sidePrefix));
+        }
+      }
+    } else {
+      // All sides have the same border - use shorthand classes
+      // Handle stroke color variable
+      if (stroke.variable) {
+        const tailwindVarName = figmaVariableToTailwindClass(stroke.variable);
+        const color = stroke.color;
+        const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
+        if (opacity < 1) {
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          variableMap[stroke.variable] = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        } else {
+          variableMap[stroke.variable] = color;
+        }
+        classes.push(`border-${tailwindVarName}`);
+      } else {
+        const color = stroke.color;
+        const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
+        if (opacity < 1) {
+          const r = parseInt(color.slice(1, 3), 16);
+          const g = parseInt(color.slice(3, 5), 16);
+          const b = parseInt(color.slice(5, 7), 16);
+          classes.push(`border-[rgba(${r},${g},${b},${opacity})]`);
+        } else {
+          classes.push(`border-[${color}]`);
+        }
+      }
 
+      // Handle strokeWeight variable
+      if (strokes.strokeWeightVariable) {
+        const borderWidthValue = extractBorderWidthValue(strokes.strokeWeightVariable);
+        if (borderWidthValue) {
+          // Use Tailwind border width class - always use explicit format (border-1, border-2, etc.)
+          classes.push(`border-${borderWidthValue}`);
+        } else {
+          // Fallback to arbitrary value
+          const tailwindVarName = figmaVariableToTailwindClass(strokes.strokeWeightVariable);
+          variableMap[strokes.strokeWeightVariable] = `${weight}px`;
+          classes.push(`border-[var(--${tailwindVarName})]`);
+        }
+      } else {
+        // Use Tailwind border width utilities - always use explicit format (border-1, border-2, etc.)
+        const borderWidthMap: { [key: number]: string } = {
+          1: "border-1",
+          2: "border-2",
+          3: "border-3",
+          4: "border-4",
+          8: "border-8",
+        };
+        const borderClass = borderWidthMap[weight] || `border-[${weight}px]`;
+        classes.push(borderClass);
+      }
+    }
   }
 
   // Handle border style based on strokeDashArray (applies to all stroke types)

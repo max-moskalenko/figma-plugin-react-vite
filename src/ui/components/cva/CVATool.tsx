@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { CVAProvider, useCVA } from "./CVAContext";
+import { useCVA } from "./CVAContext";
 import { MappingMode } from "./components/MappingMode";
 import { CodeMode } from "./components/CodeMode";
 import { CVARightSidebar } from "./components/CVARightSidebar";
@@ -154,15 +154,14 @@ export function CVATool({ extractorResult }: CVAToolProps) {
     };
   }, [isResizing]);
 
+  // Note: CVAProvider is now provided from App.tsx to persist state across tool switches
   return (
-    <CVAProvider>
-      <CVAToolContent 
-        extractorResult={extractorResult} 
-        sidebarWidth={sidebarWidth}
-        isResizing={isResizing}
-        onResizeStart={handleResizeMouseDown}
-      />
-    </CVAProvider>
+    <CVAToolContent 
+      extractorResult={extractorResult} 
+      sidebarWidth={sidebarWidth}
+      isResizing={isResizing}
+      onResizeStart={handleResizeMouseDown}
+    />
   );
 }
 

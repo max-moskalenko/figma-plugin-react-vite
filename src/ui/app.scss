@@ -65,7 +65,19 @@ $shadow-lg:
   overflow: hidden;
 
   // Tool content wrapper - contains either extractor or CVA tool
-  .tool-content {
+  .tool-view {
+  display: contents;
+  
+  &.hidden {
+    display: none;
+  }
+  
+  &.active {
+    display: contents;
+  }
+}
+
+.tool-content {
     flex: 1;
     display: flex;
     gap: 0;

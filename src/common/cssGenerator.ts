@@ -86,12 +86,16 @@ export function generateClassName(nodeName: string, nodeType: string, index: num
 }
 
 /**
- * Converts fill (background) properties to CSS background-color or background properties.
+ * Converts fill (background) properties to CSS color properties with semantic detection.
  * 
  * CSS GENERATION LOGIC:
  * 1. With Variable:
  *    - Converts Figma variable name to CSS custom property (e.g., "fill/neutral/default" → "--fill-neutral-default")
- *    - Generates: background-color: var(--fill-neutral-default)
+ *    - SEMANTIC PROPERTY DETECTION: Analyzes variable name to determine correct CSS property:
+ *      * Variables with "foreground", "text-color", "text/" → color: var(...)
+ *      * Variables with "stroke", "border-color", "border/" → border-color: var(...)
+ *      * Variables with "fill", "background", "bg-" → background-color: var(...)
+ *    - This prevents semantic errors like "background-color: var(--foreground-neutral)"
  *    - Stores resolved color value in variableMap for :root block generation
  *    - Handles opacity: if opacity < 1, stores as rgba() in variableMap
  * 
@@ -109,7 +113,7 @@ export function generateClassName(nodeName: string, nodeType: string, index: num
  * 
  * @param fills - Array of extracted fill objects with type, color, opacity, and optional variable
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of CSS property strings (e.g., ["background-color: var(--fill-neutral-default)"])
+ * @returns Array of CSS property strings (e.g., ["background-color: var(--fill-neutral-default)", "color: var(--foreground-neutral)"])
  */
 export function fillsToCSS(fills: any, variableMap: VariableMap): string[] {
   if (!fills || fills.length === 0) return [];
@@ -132,7 +136,23 @@ export function fillsToCSS(fills: any, variableMap: VariableMap): string[] {
       } else {
         variableMap[fill.variable] = color;
       }
-      properties.push(`background-color: var(${cssVarName})`);
+      
+      // SEMANTIC PROPERTY DETECTION:
+      // Detect the correct CSS property based on variable name semantics
+      // to avoid issues like "background-color: var(--foreground-*)"
+      const varNameLower = fill.variable.toLowerCase();
+      let cssProperty = 'background-color'; // Default
+      
+      if (varNameLower.includes('foreground') || varNameLower.includes('text-color') || varNameLower.startsWith('text/')) {
+        // Variables with "foreground" or "text" semantics should use color property
+        cssProperty = 'color';
+      } else if (varNameLower.includes('stroke') || varNameLower.includes('border-color') || varNameLower.startsWith('border/')) {
+        // Variables with "stroke" or "border" semantics should use border-color
+        cssProperty = 'border-color';
+      }
+      // Otherwise keep default 'background-color' for fill/background variables
+      
+      properties.push(`${cssProperty}: var(${cssVarName})`);
     } else {
       // Use raw value
       const color = fill.color;
@@ -176,9 +196,14 @@ export function fillsToCSS(fills: any, variableMap: VariableMap): string[] {
  * Handles both stroke color and stroke weight variables. If variables are bound,
  * generates CSS custom property references and stores resolved values in variableMap.
  * 
- * @param strokes - Extracted stroke object with strokes array, strokeWeight, and variable info
+ * INDIVIDUAL SIDE SUPPORT:
+ * When hasIndividualStrokes is true, generates side-specific border properties:
+ * - border-top, border-right, border-bottom, border-left (only for sides that have strokes)
+ * Otherwise, generates a single border property for all sides.
+ * 
+ * @param strokes - Extracted stroke object with strokes array, strokeWeight, individualSides, and variable info
  * @param variableMap - Map to store CSS variable definitions (modified in place)
- * @returns Array of CSS property strings (e.g., ["border: var(--border-width) solid var(--color-border)"])
+ * @returns Array of CSS property strings (e.g., ["border-bottom: 1px solid #000", "border-left: 2px solid #000"])
  */
 export function strokesToCSS(strokes: any, variableMap: VariableMap): string[] {
   if (!strokes || !strokes.strokes || strokes.strokes.length === 0) return [];
@@ -219,16 +244,6 @@ export function strokesToCSS(strokes: any, variableMap: VariableMap): string[] {
       }
     }
 
-    // Handle strokeWeight variable
-    let borderWidth: string;
-    if (strokes.strokeWeightVariable) {
-      const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
-      variableMap[strokes.strokeWeightVariable] = `${weight}px`;
-      borderWidth = `var(${cssVarName})`;
-    } else {
-      borderWidth = `${weight}px`;
-    }
-
     // Determine border style based on strokeDashArray
     let borderStyle: string = "solid";
     if (strokes.strokeDashArray && strokes.strokeDashArray.length > 0) {
@@ -244,7 +259,69 @@ export function strokesToCSS(strokes: any, variableMap: VariableMap): string[] {
       // For custom patterns, we use dashed as the closest approximation
     }
 
-    properties.push(`border: ${borderWidth} ${borderStyle} ${borderColor}`);
+    // Check if we have individual side strokes
+    if (strokes.hasIndividualStrokes && strokes.individualSides) {
+      // Generate side-specific border properties
+      const sides = strokes.individualSides;
+      
+      if (sides.top !== undefined) {
+        let sideWidth: string;
+        if (strokes.strokeWeightVariable) {
+          const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
+          variableMap[strokes.strokeWeightVariable] = `${sides.top}px`;
+          sideWidth = `var(${cssVarName})`;
+        } else {
+          sideWidth = `${sides.top}px`;
+        }
+        properties.push(`border-top: ${sideWidth} ${borderStyle} ${borderColor}`);
+      }
+      
+      if (sides.right !== undefined) {
+        let sideWidth: string;
+        if (strokes.strokeWeightVariable) {
+          const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
+          sideWidth = `var(${cssVarName})`;
+        } else {
+          sideWidth = `${sides.right}px`;
+        }
+        properties.push(`border-right: ${sideWidth} ${borderStyle} ${borderColor}`);
+      }
+      
+      if (sides.bottom !== undefined) {
+        let sideWidth: string;
+        if (strokes.strokeWeightVariable) {
+          const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
+          sideWidth = `var(${cssVarName})`;
+        } else {
+          sideWidth = `${sides.bottom}px`;
+        }
+        properties.push(`border-bottom: ${sideWidth} ${borderStyle} ${borderColor}`);
+      }
+      
+      if (sides.left !== undefined) {
+        let sideWidth: string;
+        if (strokes.strokeWeightVariable) {
+          const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
+          sideWidth = `var(${cssVarName})`;
+        } else {
+          sideWidth = `${sides.left}px`;
+        }
+        properties.push(`border-left: ${sideWidth} ${borderStyle} ${borderColor}`);
+      }
+    } else {
+      // All sides have the same border - use shorthand property
+      // Handle strokeWeight variable
+      let borderWidth: string;
+      if (strokes.strokeWeightVariable) {
+        const cssVarName = figmaVariableToCSSVariable(strokes.strokeWeightVariable);
+        variableMap[strokes.strokeWeightVariable] = `${weight}px`;
+        borderWidth = `var(${cssVarName})`;
+      } else {
+        borderWidth = `${weight}px`;
+      }
+
+      properties.push(`border: ${borderWidth} ${borderStyle} ${borderColor}`);
+    }
   }
 
   // Handle border style for non-SOLID stroke types (if any)

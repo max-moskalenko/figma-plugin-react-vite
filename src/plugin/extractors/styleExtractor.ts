@@ -146,32 +146,76 @@ function extractFills(node: SceneNode, variables: readonly VariableCollection[])
       // boundVariables.fills is an array of VariableAlias, one per fill
       let colorVar: VariableInfo = { value: fill.color, isVariable: false };
       
+      // Try node-level binding first (standard approach)
+      let fillBinding: any = null;
       if (node.boundVariables?.fills) {
-        const fillBinding = (node.boundVariables.fills as any)[fillIndex];
-        if (fillBinding && "id" in fillBinding) {
-          const variableId = fillBinding.id;
-          if (typeof variableId === "string") {
-            try {
-              const variable = figma.variables.getVariableById(variableId);
-              if (variable) {
-                // Get the value for the current mode (default to first mode)
-                let modeId = "";
+        fillBinding = (node.boundVariables.fills as any)[fillIndex];
+      }
+      // For VECTOR nodes, check fill-level binding (fill.boundVariables.color)
+      if (!fillBinding && (fill as any).boundVariables?.color) {
+        fillBinding = (fill as any).boundVariables.color;
+      }
+      
+      if (fillBinding && "id" in fillBinding) {
+        const variableId = fillBinding.id;
+        if (typeof variableId === "string") {
+          try {
+            const variable = figma.variables.getVariableById(variableId);
+            if (variable) {
+              // Get the value for the current mode (default to first mode)
+              let modeId = "";
+              for (const collection of variables) {
+                if (collection.variableIds.includes(variableId)) {
+                  modeId = collection.modes[0]?.modeId || "";
+                  break;
+                }
+              }
+              
+              // FALLBACK: If modeId not found in collections, use first available mode from variable
+              if (!modeId && variable.valuesByMode) {
+                const availableModes = Object.keys(variable.valuesByMode);
+                if (availableModes.length > 0) {
+                  modeId = availableModes[0];
+                }
+              }
+              
+              let value = variable.valuesByMode[modeId];
+              
+              // RECURSIVE RESOLUTION: If value is a VariableAlias, resolve it recursively
+              // This handles cases where variables reference other variables
+              while (value && typeof value === "object" && "type" in value && value.type === "VARIABLE_ALIAS") {
+                const aliasId = (value as any).id;
+                const aliasVariable = figma.variables.getVariableById(aliasId);
+                if (!aliasVariable) break;
+                
+                // Find mode ID for the alias variable
+                let aliasModeId = "";
                 for (const collection of variables) {
-                  if (collection.variableIds.includes(variableId)) {
-                    modeId = collection.modes[0]?.modeId || "";
+                  if (collection.variableIds.includes(aliasId)) {
+                    aliasModeId = collection.modes[0]?.modeId || "";
                     break;
                   }
                 }
-                const value = variable.valuesByMode[modeId];
-                colorVar = {
-                  name: variable.name,
-                  value: value,
-                  isVariable: true,
-                };
+                
+                // FALLBACK: If aliasModeId not found in collections, use first available mode from alias variable
+                if (!aliasModeId && aliasVariable.valuesByMode) {
+                  const availableModes = Object.keys(aliasVariable.valuesByMode);
+                  if (availableModes.length > 0) {
+                    aliasModeId = availableModes[0];
+                  }
+                }
+                
+                value = aliasVariable.valuesByMode[aliasModeId];
               }
-            } catch (e) {
-              console.warn(`Could not resolve fill variable ${variableId}:`, e);
+              
+              colorVar = {
+                name: variable.name,
+                value: value,
+                isVariable: true,
+              };
             }
+          } catch (e) {
+            console.warn(`Could not resolve fill variable ${variableId}:`, e);
           }
         }
       }
@@ -205,21 +249,26 @@ function extractFills(node: SceneNode, variables: readonly VariableCollection[])
 }
 
 /**
- * Extracts stroke (border) properties from a node, including variable resolution.
+ * Extracts stroke (border) properties from a node, including variable resolution and individual side detection.
  * 
  * Supports stroke color and stroke weight variables. Figma stores stroke weight variables
  * using separate properties for each side: strokeTopWeight, strokeBottomWeight, strokeLeftWeight, strokeRightWeight.
- * Usually all four are bound to the same variable, so we check any of them.
+ * 
+ * INDIVIDUAL SIDE DETECTION:
+ * Figma allows borders on individual sides. This function detects which sides have borders by:
+ * 1. Checking if individualStrokeWeights property exists and is not figma.mixed
+ * 2. Reading strokeTopWeight, strokeRightWeight, strokeBottomWeight, strokeLeftWeight
+ * 3. If a side has weight > 0, that side has a border
+ * 4. If individualStrokeWeights is mixed or undefined, all sides have the same border (strokeWeight)
  * 
  * @param node - The Figma node to extract strokes from
  * @param variables - All variable collections for resolving variable values
- * @returns Object with strokes array, strokeWeight, strokeWeightVariable, and strokeAlign, or null if no strokes
+ * @returns Object with strokes array, strokeWeight, individual side weights, strokeWeightVariable, and strokeAlign, or null if no strokes
  */
 function extractStrokes(node: SceneNode, variables: readonly VariableCollection[]): any {
   if (!("strokes" in node) || !node.strokes || node.strokes.length === 0) {
     return null;
   }
-
 
   const strokes = node.strokes as readonly Paint[];
   const extractedStrokes = strokes.map((stroke, strokeIndex) => {
@@ -228,37 +277,87 @@ function extractStrokes(node: SceneNode, variables: readonly VariableCollection[
       // boundVariables.strokes is an array of VariableAlias, one per stroke
       let colorVar: VariableInfo = { value: stroke.color, isVariable: false };
       
+      // Try node-level binding first (standard approach)
+      let strokeBinding: any = null;
       if (node.boundVariables?.strokes) {
-        const strokeBinding = (node.boundVariables.strokes as any)[strokeIndex];
-        if (strokeBinding && "id" in strokeBinding) {
-          const variableId = strokeBinding.id;
-          if (typeof variableId === "string") {
-            try {
-              const variable = figma.variables.getVariableById(variableId);
-              if (variable) {
-                // Get the value for the current mode (default to first mode)
-                let modeId = "";
+        strokeBinding = (node.boundVariables.strokes as any)[strokeIndex];
+      }
+      // For VECTOR nodes, check stroke-level binding (stroke.boundVariables.color)
+      if (!strokeBinding && (stroke as any).boundVariables?.color) {
+        strokeBinding = (stroke as any).boundVariables.color;
+      }
+      
+      if (strokeBinding && "id" in strokeBinding) {
+        const variableId = strokeBinding.id;
+        if (typeof variableId === "string") {
+          try {
+            const variable = figma.variables.getVariableById(variableId);
+            if (variable) {
+              // Get the value for the current mode (default to first mode)
+              let modeId = "";
+              for (const collection of variables) {
+                if (collection.variableIds.includes(variableId)) {
+                  modeId = collection.modes[0]?.modeId || "";
+                  break;
+                }
+              }
+              
+              // FALLBACK: If modeId not found in collections, use first available mode from variable
+              if (!modeId && variable.valuesByMode) {
+                const availableModes = Object.keys(variable.valuesByMode);
+                if (availableModes.length > 0) {
+                  modeId = availableModes[0];
+                }
+              }
+              
+              let value = variable.valuesByMode[modeId];
+              
+              // RECURSIVE RESOLUTION: If value is a VariableAlias, resolve it recursively
+              // This handles cases where variables reference other variables (multiple levels)
+              while (value && typeof value === "object" && "type" in value && value.type === "VARIABLE_ALIAS") {
+                const aliasId = (value as any).id;
+                const aliasVariable = figma.variables.getVariableById(aliasId);
+                if (!aliasVariable) break;
+                
+                // Find mode ID for the alias variable
+                let aliasModeId = "";
                 for (const collection of variables) {
-                  if (collection.variableIds.includes(variableId)) {
-                    modeId = collection.modes[0]?.modeId || "";
+                  if (collection.variableIds.includes(aliasId)) {
+                    aliasModeId = collection.modes[0]?.modeId || "";
                     break;
                   }
                 }
-                const value = variable.valuesByMode[modeId];
-                colorVar = {
-                  name: variable.name,
-                  value: value,
-                  isVariable: true,
-                };
+                
+                // FALLBACK: If aliasModeId not found in collections, use first available mode from alias variable
+                if (!aliasModeId && aliasVariable.valuesByMode) {
+                  const availableModes = Object.keys(aliasVariable.valuesByMode);
+                  if (availableModes.length > 0) {
+                    aliasModeId = availableModes[0];
+                  }
+                }
+                
+                value = aliasVariable.valuesByMode[aliasModeId];
               }
-            } catch (e) {
-              console.warn(`Could not resolve stroke variable ${variableId}:`, e);
+              
+              colorVar = {
+                name: variable.name,
+                value: value,
+                isVariable: true,
+              };
             }
+          } catch (e) {
+            console.warn(`Could not resolve stroke variable ${variableId}:`, e);
           }
         }
       }
       
-      const color = colorVar.isVariable ? colorVar.value : stroke.color;
+      let color = colorVar.isVariable ? colorVar.value : stroke.color;
+      
+      // Ensure color is a valid RGB object, not still an alias or Symbol
+      // If color resolution failed or returned an alias, fall back to the stroke's raw color
+      if (!color || typeof color !== "object" || !("r" in color) || !("g" in color) || !("b" in color)) {
+        color = stroke.color;
+      }
       
       const hex = rgbToHex(color.r, color.g, color.b);
       const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
@@ -273,14 +372,110 @@ function extractStrokes(node: SceneNode, variables: readonly VariableCollection[
     return stroke;
   });
 
-  const strokeWeight = "strokeWeight" in node ? node.strokeWeight : undefined;
+  let strokeWeight: number | undefined = undefined;
   const strokeAlign = "strokeAlign" in node ? node.strokeAlign : undefined;
   const strokeDashArray = "strokeDashArray" in node ? (node as any).strokeDashArray : undefined;
+
+  // Extract individual stroke side weights
+  // Figma has individualStrokeWeights property that indicates if sides have different weights
+  const nodeAny = node as any;
+  let individualSides: { top?: number; right?: number; bottom?: number; left?: number } | undefined;
+  let hasIndividualStrokes = false;
+  
+  // Check if the node has individual stroke weights
+  if ("strokeTopWeight" in nodeAny && "strokeRightWeight" in nodeAny && 
+      "strokeBottomWeight" in nodeAny && "strokeLeftWeight" in nodeAny) {
+    const topWeight = typeof nodeAny.strokeTopWeight === "number" ? nodeAny.strokeTopWeight : 0;
+    const rightWeight = typeof nodeAny.strokeRightWeight === "number" ? nodeAny.strokeRightWeight : 0;
+    const bottomWeight = typeof nodeAny.strokeBottomWeight === "number" ? nodeAny.strokeBottomWeight : 0;
+    const leftWeight = typeof nodeAny.strokeLeftWeight === "number" ? nodeAny.strokeLeftWeight : 0;
+    
+    // Check if sides have different weights (individual strokes)
+    const allSame = topWeight === rightWeight && rightWeight === bottomWeight && bottomWeight === leftWeight;
+    const allZero = topWeight === 0 && rightWeight === 0 && bottomWeight === 0 && leftWeight === 0;
+    
+    if (!allSame && !allZero) {
+      hasIndividualStrokes = true;
+      individualSides = {};
+      if (topWeight > 0) individualSides.top = topWeight;
+      if (rightWeight > 0) individualSides.right = rightWeight;
+      if (bottomWeight > 0) individualSides.bottom = bottomWeight;
+      if (leftWeight > 0) individualSides.left = leftWeight;
+    }
+  }
 
   // Figma uses separate properties for each stroke side: strokeTopWeight, strokeBottomWeight, strokeLeftWeight, strokeRightWeight
   // Usually all four are bound to the same variable, so we check any of them
   let strokeWeightVariable: string | undefined;
-  if (strokeWeight !== undefined) {
+  
+  // First, get strokeWeight - it might be a Symbol if bound to a variable
+  if ("strokeWeight" in node) {
+    const rawStrokeWeight = node.strokeWeight;
+    // Check if it's a Symbol (variable binding) or an actual number
+    if (typeof rawStrokeWeight === "number") {
+      strokeWeight = rawStrokeWeight;
+    } else if (typeof rawStrokeWeight === "symbol") {
+      // strokeWeight is bound to a variable - we need to resolve it
+      // Check the boundVariables to find the actual variable
+      const boundVars = node.boundVariables as any;
+      const strokeWeightProperties = ["strokeTopWeight", "strokeBottomWeight", "strokeLeftWeight", "strokeRightWeight", "strokeWeight"];
+      
+      for (const propName of strokeWeightProperties) {
+        if (boundVars?.[propName]) {
+          const binding = boundVars[propName];
+          if (binding && "id" in binding && typeof binding.id === "string") {
+            try {
+              const variable = figma.variables.getVariableById(binding.id);
+              if (variable) {
+                // Get the value for the current mode
+                let modeId = "";
+                for (const collection of variables) {
+                  if (collection.variableIds.includes(binding.id)) {
+                    modeId = collection.modes[0]?.modeId || "";
+                    break;
+                  }
+                }
+                let value = variable.valuesByMode[modeId];
+                
+                // Resolve alias if needed
+                if (value && typeof value === "object" && "type" in (value as any) && (value as any).type === "VARIABLE_ALIAS") {
+                  const aliasId = (value as any).id;
+                  if (typeof aliasId === "string") {
+                    const aliasVariable = figma.variables.getVariableById(aliasId);
+                    if (aliasVariable) {
+                      for (const collection of variables) {
+                        if (collection.variableIds.includes(aliasId)) {
+                          const aliasModeId = collection.modes[0]?.modeId || "";
+                          value = aliasVariable.valuesByMode[aliasModeId];
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+                
+                if (typeof value === "number") {
+                  strokeWeight = value;
+                  strokeWeightVariable = variable.name;
+                }
+                break;
+              }
+            } catch (e) {
+              console.warn(`Could not resolve strokeWeight variable:`, e);
+            }
+          }
+        }
+      }
+      
+      // Fallback: if we still don't have a strokeWeight, try to get it from the first stroke
+      if (strokeWeight === undefined && extractedStrokes.length > 0) {
+        strokeWeight = 1; // Default fallback
+      }
+    }
+  }
+  
+  // If strokeWeight is a number but we haven't resolved a variable yet, check for bindings
+  if (strokeWeight !== undefined && !strokeWeightVariable) {
     const boundVars = node.boundVariables as any;
     const strokeWeightProperties = ["strokeTopWeight", "strokeBottomWeight", "strokeLeftWeight", "strokeRightWeight"];
     
@@ -302,6 +497,8 @@ function extractStrokes(node: SceneNode, variables: readonly VariableCollection[
     strokeWeightVariable,
     strokeAlign,
     strokeDashArray,
+    individualSides, // New: individual side weights
+    hasIndividualStrokes, // New: flag indicating if sides differ
   };
 }
 

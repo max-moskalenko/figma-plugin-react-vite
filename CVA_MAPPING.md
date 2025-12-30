@@ -256,37 +256,32 @@ To add new variant name patterns, update the `variantPatterns` array in `useCVAS
 
 ## DOM Element Extraction
 
-Classes are mapped to their DOM elements to enable filtering in the class selection modal.
+Classes are mapped to their DOM elements to enable filtering in the class selection modal. This is a complex system that combines RAW JSON structure with Tailwind HTML classes.
 
-### Extraction Logic
+### Quick Overview
 
-1. **Parse className attributes**: Extract all `className="..."` or `class="..."` from the stylesheet
-2. **Identify element names**: The first class in a className attribute is often the element name
-3. **Element name detection**: Check if a class looks like an element name vs utility class
+1. **Parse RAW JSON**: Build hierarchical DOM structure with depth tracking
+2. **Parse Tailwind HTML**: Extract class-to-element mappings
+3. **Combine**: Associate classes with elements from hierarchy
 
-### Element Name Detection
-
-```typescript
-function isElementName(className: string): boolean {
-  const looksLikeElement = /^[a-zA-Z][\w.-]*$/.test(className) && 
-    (className.includes('.') ||        // Label.Root
-     /^[A-Z]/.test(className) ||       // Component names
-     ['div', 'span', 'p', 'button'].includes(className.toLowerCase()) ||
-     /^[a-z]+-[a-z]+$/.test(className)); // slider-root
-  
-  const isUtilityClass = /^(flex|grid|w-|h-|p-|m-|bg-|text-)/.test(className);
-  
-  return looksLikeElement && !isUtilityClass;
-}
-```
+**For complete documentation of the DOM-to-Classes mapping system, see [DOM_TO_CLASSES_MAPPING.md](./DOM_TO_CLASSES_MAPPING.md)**, which covers:
+- Two-pass extraction strategy
+- Name normalization algorithms
+- Variant hierarchy management
+- Filtering logic
+- Recent fixes and troubleshooting
 
 ### Modal Filtering Structure
 
 For component sets, the Class Selection Modal provides hierarchical filtering:
 
-1. **Variant Selector**: Choose a specific variant (e.g., `vis-height-h-28-...`) or "All Variants"
-2. **DOM Element List**: Shows child elements within the selected variant
-3. **Class Filtering**: Classes are filtered based on both selections
+1. **Variant Selector**: Choose a specific variant (e.g., `sentiment=neutral, interaction=default`) or "All Variants"
+2. **DOM Element List**: Shows hierarchical DOM structure with visual nesting
+   - Root elements at depth 0
+   - Children indented 12px per depth level
+   - Tree indicators (`└`) for visual hierarchy
+3. **Class Filtering**: Classes are filtered based on both variant and element selections
+4. **Resizable Sidebar**: Drag to resize for long element names
 
 ---
 

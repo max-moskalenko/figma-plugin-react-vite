@@ -7,7 +7,7 @@ import JSZip from "jszip";
 import "@ui/styles/main.scss";
 import "./app.scss";
 import { LeftNavigation, ToolType } from "@ui/components/shared/LeftNavigation";
-import { CVATool } from "@ui/components/cva";
+import { CVATool, CVAProvider } from "@ui/components/cva";
 
 type OutputFormat = "css" | "tailwind" | "raw";
 
@@ -26,6 +26,7 @@ function App() {
   const [annotationsEnabled, setAnnotationsEnabled] = useState(true);
   const [annotationFormat, setAnnotationFormat] = useState<AnnotationFormat>("html");
   const [prettifyEnabled, setPrettifyEnabled] = useState(true);
+  const [excludeZeroValues, setExcludeZeroValues] = useState(true);
   
   // Export dropdown state
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
@@ -282,6 +283,34 @@ function App() {
       }));
   };
 
+  /**
+   * Filter zero-value classes from stylesheet output
+   * Classes like rounded-[0px], p-[0px_0px_0px_0px] are removed
+   */
+  const filterZeroValueClasses = (stylesheet: string): string => {
+    // Patterns for zero-value classes within class/className attributes
+    const zeroPatterns = [
+      /\s*[\w-]+\[0(px)?(_0(px)?)*\]/g,  // arbitrary zero: rounded-[0px], p-[0px_0px_0px_0px]
+      /\s*(m|p|gap|space-[xy]|inset|top|right|bottom|left|w|h|min-w|min-h|max-w|max-h)-0(?=[\s"<>]|$)/g,  // standard zeros
+      /\s*rounded-none/g,
+      /\s*rounded-\[0\]/g,
+    ];
+    
+    let result = stylesheet;
+    for (const pattern of zeroPatterns) {
+      result = result.replace(pattern, '');
+    }
+    
+    // Clean up multiple spaces within class attributes only (preserve newlines and indentation)
+    // Match className="..." or class="..." and clean spaces only within the quotes
+    result = result.replace(/((?:class|className)="[^"]*")/g, (match) => {
+      // Within the class attribute, replace multiple spaces with single space
+      return match.replace(/\s{2,}/g, ' ').replace(/"\s+/g, '"').replace(/\s+"/g, '"');
+    });
+    
+    return result;
+  };
+
   const handleGetCode = async () => {
     setLoading(true);
     setError(null);
@@ -292,11 +321,26 @@ function App() {
       const effectiveAnnotationFormat = annotationsEnabled ? annotationFormat : "none";
       
       // Extract all formats at once with annotation and prettify settings
-      const extractionResult = await UI_CHANNEL.request(
+      let extractionResult = await UI_CHANNEL.request(
         PLUGIN,
         "extractComponent",
         [effectiveAnnotationFormat, prettifyEnabled]
       ) as MultiFormatExtractionResult;
+      
+      // Filter out zero-value classes if setting is enabled
+      if (excludeZeroValues) {
+        extractionResult = {
+          ...extractionResult,
+          css: {
+            ...extractionResult.css,
+            stylesheet: filterZeroValueClasses(extractionResult.css.stylesheet),
+          },
+          tailwind: {
+            ...extractionResult.tailwind,
+            stylesheet: filterZeroValueClasses(extractionResult.tailwind.stylesheet),
+          },
+        };
+      }
       
       setResult(extractionResult);
       setComponentName(extractionResult.componentName);
@@ -572,6 +616,18 @@ function App() {
               </label>
               <span className="toggle-label">Prettify</span>
             </div>
+            <div className="option-item">
+              <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={excludeZeroValues}
+                  onChange={(e) => setExcludeZeroValues(e.target.checked)}
+                  disabled={loading}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+              <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
+            </div>
           </div>
           
           {(() => {
@@ -675,17 +731,23 @@ function App() {
   );
 
   return (
-    <div className="figma-plugin">
-      <LeftNavigation 
-        activeToolItem={activeToolItem} 
-        onToolChange={setActiveToolItem}
-        onGetCode={handleGetCode}
-        loading={loading}
-      />
-      
-      <div className="tool-content">
-        {activeToolItem === "extractor" && renderExtractorTool()}
-        {activeToolItem === "cva-mapping" && renderCVAMappingTool()}
+    <CVAProvider>
+      <div className="figma-plugin">
+        <LeftNavigation 
+          activeToolItem={activeToolItem} 
+          onToolChange={setActiveToolItem}
+          onGetCode={handleGetCode}
+          loading={loading}
+        />
+        
+        <div className="tool-content">
+          {/* Keep both tools rendered but hide inactive one to preserve state */}
+          <div className={`tool-view ${activeToolItem === "extractor" ? "active" : "hidden"}`}>
+            {renderExtractorTool()}
+          </div>
+          <div className={`tool-view ${activeToolItem === "cva-mapping" ? "active" : "hidden"}`}>
+            {renderCVAMappingTool()}
+        </div>
       </div>
       
       <div 
@@ -694,6 +756,7 @@ function App() {
         title="Drag to resize window"
       />
     </div>
+    </CVAProvider>
   );
 }
 

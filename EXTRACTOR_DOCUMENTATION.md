@@ -2,6 +2,8 @@
 
 This document provides comprehensive technical documentation for the DOM Extractor Tool, which extracts complete DOM structures with styles from Figma components and generates production-ready code.
 
+**For system-wide architecture and data flow, see [ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)**.
+
 ## Table of Contents
 
 1. [Overview](#overview)

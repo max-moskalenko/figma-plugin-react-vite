@@ -50,13 +50,10 @@ The plugin uses a two-side architecture (plugin code and UI) that communicate vi
 
 The extraction process extracts node hierarchies, resolves Figma variables, loads fonts, and generates output in CSS or Tailwind format.
 
-**For detailed technical documentation on the extractor, see [EXTRACTOR_DOCUMENTATION.md](./EXTRACTOR_DOCUMENTATION.md)**, which covers:
-- Complete extraction pipeline details
-- Style extraction and variable resolution
-- Component traversal algorithm
-- Output format specifications
-- Extending the extractor
-- Debugging and troubleshooting
+**For comprehensive documentation, see:**
+- **[ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)** - Complete system architecture, data transformations, and design decisions
+- **[EXTRACTOR_DOCUMENTATION.md](./EXTRACTOR_DOCUMENTATION.md)** - DOM Extractor technical documentation
+- **[CVA_MAPPING.md](./CVA_MAPPING.md)** - CVA Mapping Tool technical documentation
 
 ## What It Extracts
 
@@ -351,13 +348,24 @@ The plugin checks these property names when resolving variables:
 
 ## Documentation
 
-This project includes comprehensive documentation:
+**📚 Not sure where to start? See [DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md) for a complete guide to navigating all documentation.**
 
-- **[README.md](./README.md)** (this file) - Overview, features, and usage instructions
+This project includes comprehensive documentation organized by topic:
+
+### Overview & Architecture
+- **[README.md](./README.md)** (this file) - Plugin overview, features, and usage instructions
+- **[ARCHITECTURE_ANALYSIS.md](./ARCHITECTURE_ANALYSIS.md)** - Complete system architecture, data flow, and transformation pipelines
+
+### Tool-Specific Documentation
 - **[EXTRACTOR_DOCUMENTATION.md](./EXTRACTOR_DOCUMENTATION.md)** - Complete technical documentation for the DOM Extractor Tool
 - **[CVA_MAPPING.md](./CVA_MAPPING.md)** - Complete technical documentation for the CVA Mapping Tool
+
+### Mapping & Transformation Documentation
 - **[CSS_TO_TAILWIND_MAPPING.md](./CSS_TO_TAILWIND_MAPPING.md)** - Detailed Tailwind remapping rules and patterns
-- **[REFACTORING_SUMMARY.md](./REFACTORING_SUMMARY.md)** - Project refactoring history
+- **[DOM_TO_CLASSES_MAPPING.md](./DOM_TO_CLASSES_MAPPING.md)** - DOM-to-Classes association system and filtering
+
+### Development History
+- **[REFACTORING_SUMMARY.md](./REFACTORING_SUMMARY.md)** - Development milestones and project history
 
 ## Development
 

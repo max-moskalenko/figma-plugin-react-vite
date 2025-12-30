@@ -85,6 +85,50 @@ function generateId(): string {
 }
 
 /**
+ * Strip Figma internal ID suffixes from property/element names
+ * 
+ * Figma sometimes appends internal IDs to names in format "#nodeId:index"
+ * Examples:
+ * - "textLabel#1918:5" → "textLabel"
+ * - "Button Icon#2280:0" → "Button Icon"
+ * - "normalName" → "normalName" (unchanged)
+ * 
+ * @param name - Name that may contain Figma ID suffix
+ * @returns Cleaned name without ID suffix
+ */
+function stripFigmaIdSuffix(name: string): string {
+  // Remove #nodeId:index pattern from the end
+  return name.replace(/#\d+:\d+$/, '').trim();
+}
+
+/**
+ * Check if a class represents a zero/empty value that can be filtered
+ * 
+ * Zero-value classes don't add visual styling and often clutter the output.
+ * Examples:
+ * - "rounded-[0px]" → true (no rounding)
+ * - "p-[0px_0px_0px_0px]" → true (no padding)
+ * - "m-0" → true (no margin)
+ * - "gap-0" → true (no gap)
+ * - "p-4" → false (has padding)
+ * 
+ * @param className - Class name to check
+ * @returns true if this is a zero-value class
+ */
+function isZeroValueClass(className: string): boolean {
+  // Arbitrary zero values: rounded-[0px], p-[0px], m-[0px_0px_0px_0px], etc.
+  if (/\[0(px)?(_0(px)?)*\]/.test(className)) return true;
+  
+  // Standard Tailwind zero values: m-0, p-0, gap-0, space-x-0, etc.
+  if (/^(m|p|gap|space-[xy]|inset|top|right|bottom|left|w|h|min-w|min-h|max-w|max-h)-0$/.test(className)) return true;
+  
+  // Rounded zero
+  if (className === 'rounded-none' || className === 'rounded-[0]') return true;
+  
+  return false;
+}
+
+/**
  * Categorize a class name based on patterns
  * 
  * Determines which category a CSS class belongs to by testing against
@@ -176,24 +220,35 @@ function categorizeClass(className: string): ClassCategory {
  * @returns true if this looks like a Figma variant name, false if it's a real CSS class
  */
 function isFigmaVariantName(className: string): boolean {
-  // Variant names are typically long and contain multiple vis- or property-value patterns
+  // Variant names are typically long and contain multiple property-value patterns
   // Common patterns: vis-property-value, interaction-state, disabled-bool
   
   // Must be reasonably long to be a variant combo
-  if (className.length < 20) return false;
+  if (className.length < 15) return false;
   
   // Count how many property-like segments exist
   const segments = className.split('-');
-  if (segments.length < 5) return false;
+  if (segments.length < 4) return false;
   
-  // Check for common Figma variant prefixes
+  // Check for common Figma variant patterns (start, middle, or end positions)
   const variantPatterns = [
-    /^vis-/,                    // starts with vis-
-    /-vis-/,                    // contains -vis-
-    /-(true|false)(-|$)/,       // contains boolean values
-    /-interaction-/,            // interaction state
-    /-disabled-/,               // disabled state
-    /-sentiment-/,              // sentiment property
+    /^vis-/,                      // starts with vis-
+    /-vis-/,                      // contains -vis-
+    /-(true|false)(-|$)/,         // contains boolean values
+    /^(true|false)-/,             // starts with boolean
+    /-interaction(-|$)/,          // interaction state (start, middle, end)
+    /^interaction-/,              // starts with interaction
+    /-disabled(-|$)/,             // disabled state
+    /^disabled-/,                 // starts with disabled
+    /-sentiment(-|$)/,            // sentiment property
+    /^sentiment-/,                // starts with sentiment
+    /-height-h-\d+/,              // height value pattern
+    /-state(-|$)/,                // state property
+    /^state-/,                    // starts with state
+    /-default(-|$)/,              // default state
+    /-hover(-|$)/,                // hover state
+    /-pressed(-|$)/,              // pressed state
+    /-active(-|$)/,               // active state
   ];
   
   let matchCount = 0;
@@ -353,7 +408,8 @@ function extractDOMElements(stylesheet: string): string[] {
   let match;
   
   while ((match = dataNameRegex.exec(stylesheet)) !== null) {
-    elements.add(match[1]);
+    // Strip Figma ID suffixes from element names
+    elements.add(stripFigmaIdSuffix(match[1]));
   }
   
   return Array.from(elements);
@@ -396,13 +452,16 @@ function extractPropertiesFromSnippet(rawStylesheet: string): Map<string, Set<st
   let match;
   
   while ((match = propValueRegex.exec(rawStylesheet)) !== null) {
-    const propName = match[1];
+    let propName = match[1];
     const propValue = match[2];
     
     // Skip certain prefixes that aren't variant properties
     if (propName.startsWith('data-') || propName === 'class' || propName === 'className') {
       continue;
     }
+    
+    // Strip Figma ID suffixes from property names
+    propName = stripFigmaIdSuffix(propName);
     
     if (!properties.has(propName)) {
       properties.set(propName, new Set());
@@ -446,7 +505,8 @@ function extractDOMElementsFromRaw(rawStylesheet: string): string[] {
     const name = match[1];
     // Skip names that look like variant combinations (contain =)
     if (!name.includes('=') && name.length < 50) {
-      elements.add(name);
+      // Strip Figma ID suffixes from element names
+      elements.add(stripFigmaIdSuffix(name));
     }
   }
   
@@ -686,8 +746,11 @@ export function useCVAState(): CVAState & CVAActions {
       const componentProps = result.componentProperties;
       if (componentProps?.definitions) {
         for (const def of componentProps.definitions) {
+          // Strip Figma ID suffixes from property names
+          const propName = stripFigmaIdSuffix(def.name);
+          
           // Only add if not already extracted from snippet
-          if (!snippetProperties.has(def.name)) {
+          if (!snippetProperties.has(propName)) {
             const values = new Set<string>();
             
             // Add variant options if available
@@ -713,12 +776,12 @@ export function useCVAState(): CVAState & CVAActions {
             }
             
             if (values.size > 0) {
-              snippetProperties.set(def.name, values);
+              snippetProperties.set(propName, values);
             }
           } else {
             // Merge variant options into existing property
             if (def.variantOptions) {
-              const existing = snippetProperties.get(def.name)!;
+              const existing = snippetProperties.get(propName)!;
               def.variantOptions.forEach(v => {
                 const lower = v.toLowerCase();
                 if (lower === 'true' || lower === 'false') {

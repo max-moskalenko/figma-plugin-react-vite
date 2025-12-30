@@ -152,11 +152,15 @@ function generateAttributes(
   const indentStr = "  ".repeat(indent);
   const attrs: string[] = [];
   
+  // Safely convert nodeName and nodeType to strings (handle symbols)
+  const safeNodeName = typeof nodeName === "symbol" ? "symbol-node" : String(nodeName);
+  const safeNodeType = typeof nodeType === "symbol" ? "unknown" : String(nodeType);
+  
   // data-name first (as requested)
-  attrs.push(`data-name="${nodeName.replace(/"/g, "&quot;")}"`);
+  attrs.push(`data-name="${safeNodeName.replace(/"/g, "&quot;")}"`);
   
   // data-type second
-  attrs.push(`data-type="${nodeType.toLowerCase()}"`);
+  attrs.push(`data-type="${safeNodeType.toLowerCase()}"`);
   
   // style last
   if (inlineStyle) {

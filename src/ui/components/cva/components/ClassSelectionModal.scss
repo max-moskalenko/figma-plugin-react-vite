@@ -36,12 +36,51 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
   background: $surface;
   border-radius: $radius-lg;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  width: 720px;
+  width: 920px;
   max-width: 90vw;
-  max-height: 80vh;
+  height: 600px; // Fixed height to prevent jumping
+  max-height: 90vh; // But respect viewport height
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
+  
+  &.resizing {
+    user-select: none;
+    cursor: col-resize;
+  }
+
+  // Resize handle between sidebar and content
+  .resize-handle {
+    width: 4px;
+    background: $stroke-neutral;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.15s ease;
+    
+    &:hover,
+    &.resizing {
+      background: $fill-accent-default;
+    }
+    
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -4px;
+      right: -4px;
+    }
+  }
+  
+  // Right side container (header + content + actions)
+  .modal-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
 
   .modal-header {
     display: flex;
@@ -50,6 +89,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     padding: $spacing-3 $spacing-4;
     border-bottom: $border-width-1 solid $stroke-neutral;
     background: $fill-neutral-default;
+    flex-shrink: 0;
 
     h3 {
       margin: 0;
@@ -79,25 +119,40 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     }
   }
 
-  .modal-body {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
   .dom-sidebar {
-    width: 180px;
+    // Width set dynamically via inline style
     flex-shrink: 0;
-    border-right: $border-width-1 solid $stroke-neutral;
     background: $fill-neutral-default;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    overflow: hidden; // Prevent horizontal scroll
+
+    .component-set-section {
+      padding: $spacing-2 $spacing-3;
+      border-bottom: $border-width-1 solid $stroke-neutral;
+      background: rgba($fill-accent-default, 0.05);
+      
+      .sidebar-label {
+        font-size: $font-size-xs;
+        font-weight: 600;
+        color: $foreground-muted;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: $spacing-1;
+      }
+      
+      .component-set-name {
+        font-size: $font-size-sm;
+        font-weight: 500;
+        color: $foreground-neutral;
+        word-break: break-word;
+      }
+    }
 
     .variant-selector-section {
       padding: $spacing-2 $spacing-3;
       border-bottom: $border-width-1 solid $stroke-neutral;
+      flex-shrink: 0;
       
       .sidebar-header {
         padding: 0 0 $spacing-2 0;
@@ -123,6 +178,8 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       
       option {
         padding: $spacing-2;
+        font-family: $font-sans;
+        font-size: $font-size-xs;
       }
     }
 
@@ -134,6 +191,16 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       letter-spacing: 0.5px;
       color: $foreground-muted;
       border-bottom: $border-width-1 solid $stroke-neutral;
+      flex-shrink: 0;
+    }
+
+    .dom-elements-list {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden; // Prevent horizontal scrollbar
+      
+      // Add padding to right to prevent scrollbar from overlapping counters
+      padding-right: $spacing-1;
     }
 
     .dom-item {
@@ -142,7 +209,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       justify-content: space-between;
       width: 100%;
       padding: $spacing-2 $spacing-3;
-      font-family: $font-mono;
+      font-family: $font-sans;
       font-size: $font-size-xs;
       color: $foreground-neutral;
       background: transparent;
@@ -151,12 +218,27 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       cursor: pointer;
       border-bottom: $border-width-1 solid transparent;
       gap: $spacing-1;
+      position: relative;
+      min-width: 0; // Allow flex children to shrink below content size
+
+      // Visual hierarchy indicator (left border)
+      &[data-depth]:not([data-depth="0"]) {
+        border-left: 1px solid rgba($fill-accent-default, 0.15);
+        margin-left: 12px;
+      }
 
       .dom-name {
         flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        min-width: 0; // Allow text to truncate
+        
+        .tree-indent {
+          color: $foreground-muted;
+          opacity: 0.5;
+          margin-right: 4px;
+        }
       }
 
       .dom-count {
@@ -167,6 +249,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
         color: $foreground-muted;
         background: rgba(0, 0, 0, 0.05);
         border-radius: 8px;
+        margin-left: $spacing-1; // Ensure space from scrollbar
       }
 
       &:hover {
@@ -181,26 +264,6 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
         .dom-count {
           color: $fill-accent-default;
           background: rgba($fill-accent-default, 0.15);
-        }
-      }
-
-      &.has-classes {
-        .dom-count {
-          color: $fill-accent-default;
-        }
-      }
-      
-      &.variant-wrapper {
-        background: rgba($fill-accent-default, 0.03);
-        border-bottom: $border-width-1 solid $stroke-neutral;
-        font-style: italic;
-        
-        &:hover {
-          background: rgba($fill-accent-default, 0.08);
-        }
-        
-        &.active {
-          background: rgba($fill-accent-default, 0.12);
         }
       }
     }
@@ -220,6 +283,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     padding: $spacing-3;
     border-bottom: $border-width-1 solid $stroke-neutral;
     background: $surface;
+    flex-shrink: 0;
 
     .search-input {
       flex: 1;
@@ -278,64 +342,100 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     .class-categories {
       display: flex;
       flex-direction: column;
-      gap: $spacing-3;
+      gap: $spacing-2;
     }
 
     .category-section {
+      background: $surface;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      overflow: hidden;
+
       .category-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        padding: $spacing-1 0;
-        margin-bottom: $spacing-2;
+        width: 100%;
+        padding: $spacing-2 $spacing-3;
         font-size: $font-size-xs;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: $foreground-muted;
-        border-bottom: $border-width-1 solid $stroke-neutral;
+        color: $foreground-neutral;
+        background: rgba(0, 0, 0, 0.02);
+        border: none;
+        cursor: pointer;
+        text-align: left;
+        gap: $spacing-2;
+
+        &:hover {
+          background: rgba(0, 0, 0, 0.04);
+        }
+
+        .category-toggle {
+          font-size: 8px;
+          color: $foreground-muted;
+          width: 10px;
+        }
+
+        .category-label {
+          flex: 1;
+        }
 
         .category-count {
           font-weight: 400;
           color: $foreground-muted;
+
+          .selected-count {
+            color: $fill-accent-default;
+            font-weight: 500;
+          }
         }
       }
 
-      .category-classes {
-        display: flex;
-        flex-wrap: wrap;
-        gap: $spacing-1;
-      }
+      .classes-table {
+        width: 100%;
+        border-collapse: collapse;
 
-      .class-option {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 3px 8px;
-        font-family: $font-mono;
-        font-size: $font-size-xs;
-        color: $foreground-neutral;
-        background: $fill-neutral-default;
-        border: $border-width-1 solid $stroke-neutral;
-        border-radius: 3px;
-        cursor: pointer;
-        transition: all 0.1s ease;
+        .class-row {
+          cursor: pointer;
+          border-top: $border-width-1 solid rgba(0, 0, 0, 0.04);
 
-        input[type="checkbox"] {
-          width: 12px;
-          height: 12px;
-          margin: 0;
-          accent-color: $fill-accent-default;
-        }
+          &:hover {
+            background: rgba($fill-accent-default, 0.03);
+          }
 
-        &:hover {
-          border-color: rgba($fill-accent-default, 0.4);
-        }
+          &.selected {
+            background: rgba($fill-accent-default, 0.08);
+            
+            .col-class {
+              color: $fill-accent-default;
+            }
+          }
 
-        &.selected {
-          background: rgba($fill-accent-default, 0.1);
-          border-color: rgba($fill-accent-default, 0.3);
-          color: $fill-accent-default;
+          td {
+            padding: $spacing-1 $spacing-2;
+            vertical-align: middle;
+          }
+
+          .col-checkbox {
+            width: 28px;
+            text-align: center;
+            padding-left: $spacing-3;
+
+            input[type="checkbox"] {
+              width: 14px;
+              height: 14px;
+              margin: 0;
+              accent-color: $fill-accent-default;
+              cursor: pointer;
+            }
+          }
+
+          .col-class {
+            font-family: $font-mono;
+            font-size: $font-size-xs;
+            color: $foreground-neutral;
+          }
         }
       }
     }
@@ -348,6 +448,7 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     padding: $spacing-3 $spacing-4;
     border-top: $border-width-1 solid $stroke-neutral;
     background: $fill-neutral-default;
+    flex-shrink: 0;
 
     .cancel-btn {
       padding: $spacing-2 $spacing-4;
