@@ -38,6 +38,8 @@ export interface VariantPropertyValues {
 export interface ComponentPropertiesResult {
   definitions: ComponentPropertyDefinition[];
   variants: VariantPropertyValues[];
+  description?: string;
+  documentationLinks?: Array<{ url: string; title?: string }>;
 }
 
 // Multi-format extraction result

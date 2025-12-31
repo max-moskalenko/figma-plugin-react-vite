@@ -12,10 +12,11 @@ interface ClassSelectionModalProps {
   title?: string;
 }
 
-interface DOMElement {
-  name: string;
-  depth: number;
-}
+  interface DOMElement {
+    name: string; // Original name from RAW for display
+    normalizedName: string; // Kebab-case for matching Tailwind classes
+    depth: number;
+  }
 
 interface VariantDOMStructure {
   variantName: string;
@@ -42,9 +43,12 @@ export function ClassSelectionModal({
   const [localSelection, setLocalSelection] = useState<Set<string>>(new Set(selectedClasses));
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
   const [selectedDOMElement, setSelectedDOMElement] = useState<string | null>(null);
+  const [selectedDOMElementIndex, setSelectedDOMElementIndex] = useState<number | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<ClassCategory>>(new Set());
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
+  const [collapsedDOMElements, setCollapsedDOMElements] = useState<Set<number>>(new Set());
+  const [multiSelectSameElements, setMultiSelectSameElements] = useState(false);
 
   // Parse raw JSON and Tailwind output to extract proper DOM hierarchy
   const { variants, classToDOMMap, allChildElements, componentSetName } = useMemo(() => {
@@ -79,16 +83,24 @@ export function ClassSelectionModal({
       // Add current node name if it's a real DOM element (not COMPONENT_SET or top-level COMPONENT)
       const shouldInclude = node.name && node.type !== "COMPONENT_SET" && !(node.type === "COMPONENT" && depth === 0);
       if (shouldInclude) {
+        // Preserve original name for display
+        const originalName = node.name;
+        
         // Normalize name to match Tailwind format: lowercase kebab-case
-        // Replace dots, slashes, and spaces with hyphens to match Tailwind's class name normalization
-        const normalizedName = node.name.toLowerCase().replace(/[./\s]+/g, '-');
+        // Replace ALL non-alphanumeric characters (including arrows, dots, slashes, spaces) with hyphens
+        // Then clean up multiple consecutive hyphens and leading/trailing hyphens
+        const normalizedName = originalName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')  // Replace any non-alphanumeric chars with single hyphen
+          .replace(/^-+|-+$/g, '');      // Remove leading/trailing hyphens
         childElementsSet.add(normalizedName);
         
         // Use depth directly - variant root is added separately with depth 0
         const elementDepth = depth;
         
         const element: DOMElement = {
-          name: normalizedName,
+          name: originalName,
+          normalizedName: normalizedName,
           depth: elementDepth
         };
         
@@ -179,7 +191,8 @@ export function ClassSelectionModal({
               if (variant && variant.elementName) {
                 // Add variant root element itself first (depth 0)
                 const variantRoot: DOMElement = {
-                  name: variant.elementName,
+                  name: variantNode.name, // Original name for display
+                  normalizedName: variant.elementName, // Kebab-case for matching
                   depth: 0
                 };
                 
@@ -203,7 +216,8 @@ export function ClassSelectionModal({
         if (variant && variant.elementName) {
           // Add variant root element itself first (depth 0)
           const variantRoot: DOMElement = {
-            name: variant.elementName,
+            name: node.name, // Original name for display
+            normalizedName: variant.elementName, // Kebab-case for matching
             depth: 0
           };
           
@@ -301,6 +315,7 @@ export function ClassSelectionModal({
       setSearchTerm("");
       setSelectedVariant(null);
       setSelectedDOMElement(null);
+      setSelectedDOMElementIndex(null);
       setCollapsedCategories(new Set());
     }
   }, [isOpen, selectedClasses]);
@@ -351,6 +366,60 @@ export function ClassSelectionModal({
     return counts;
   }, [selectedVariant, variants, classToDOMMap]);
 
+  // Helper: Get parent hierarchy path for an element at a given index
+  const getParentPath = (index: number): string => {
+    const elem = currentChildElements[index];
+    if (!elem || elem.depth === 0) return '';
+    
+    const parents: string[] = [];
+    let currentDepth = elem.depth;
+    
+    // Walk backwards to find DIRECT parents only (depth must be exactly one less each time)
+    for (let i = index - 1; i >= 0 && currentDepth > 0; i--) {
+      const potentialParent = currentChildElements[i];
+      // Only accept direct parent (depth exactly one less than current)
+      if (potentialParent.depth === currentDepth - 1) {
+        parents.unshift(potentialParent.normalizedName);
+        currentDepth = potentialParent.depth;
+        if (currentDepth === 0) break;
+      }
+    }
+    return parents.join('/');
+  };
+
+  // Helper: Find all elements with the same name (ignoring parent structure)
+  const findMatchingElements = (targetIndex: number): number[] => {
+    const targetElem = currentChildElements[targetIndex];
+    if (!targetElem) return [targetIndex];
+    
+    const targetName = targetElem.normalizedName;
+    
+    // Match by name only - ignore parent hierarchy
+    return currentChildElements
+      .map((elem, idx) => {
+        if (elem.normalizedName === targetName) {
+          return idx;
+        }
+        return -1;
+      })
+      .filter(idx => idx !== -1);
+  };
+
+  // Get all selected element normalized names for filtering
+  const selectedDOMElementsForFiltering = useMemo(() => {
+    if (!selectedDOMElement || selectedDOMElementIndex === null) return null;
+    
+    if (multiSelectSameElements) {
+      // Multi-select mode - find all elements with same name (ignoring parent structure)
+      const matchingIndices = findMatchingElements(selectedDOMElementIndex);
+      const matchingNames = new Set(matchingIndices.map(idx => currentChildElements[idx].normalizedName));
+      return matchingNames;
+    }
+    
+    // Single selection mode - just return the selected element
+    return new Set([selectedDOMElement]);
+  }, [selectedDOMElement, selectedDOMElementIndex, multiSelectSameElements, currentChildElements]);
+
   // Filter classes based on variant and DOM element selection
   const filteredClasses = useMemo(() => {
     let classes = extractedClasses;
@@ -370,37 +439,46 @@ export function ClassSelectionModal({
     }
     
     // Then filter by DOM element within that variant
-    if (selectedDOMElement) {
+    if (selectedDOMElementsForFiltering) {
       if (selectedVariant) {
-        // Filter to specific element within variant
+        // Filter to specific element(s) within variant
         const variant = variants.find(v => v.variantName === selectedVariant);
         if (variant) {
-          if (selectedDOMElement === variant.elementName) {
-            // Selected the variant root itself
-            const wrapperClasses = new Set(variant.variantClasses);
-            classes = classes.filter(c => wrapperClasses.has(c.className));
-          } else {
-            // Selected a child element
-            const elementClasses = variant.childElements.get(selectedDOMElement);
-            if (elementClasses) {
-              const classSet = new Set(elementClasses);
-              classes = classes.filter(c => classSet.has(c.className));
+          const classSet = new Set<string>();
+          
+          selectedDOMElementsForFiltering.forEach(elemName => {
+            if (elemName === variant.elementName) {
+              // Include variant root classes
+              variant.variantClasses.forEach(cls => classSet.add(cls));
+            } else {
+              // Include child element classes
+              const elementClasses = variant.childElements.get(elemName);
+              if (elementClasses) {
+                elementClasses.forEach(cls => classSet.add(cls));
+              }
             }
-          }
+          });
+          
+          classes = classes.filter(c => classSet.has(c.className));
         }
       } else {
-        // No variant selected - filter by DOM element across all
+        // No variant selected - filter by DOM element(s) across all
         classes = classes.filter(c => {
           const mappedElements = classToDOMMap.get(c.className);
-          const hasElement = mappedElements && mappedElements.has(selectedDOMElement);
-          return hasElement;
+          if (!mappedElements) return false;
+          
+          // Check if the class is used by any of the selected elements
+          for (const elemName of selectedDOMElementsForFiltering) {
+            if (mappedElements.has(elemName)) return true;
+          }
+          return false;
         });
       }
     }
     
     // Filter by search term
     return filterClasses(classes, searchTerm);
-  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElement, variants, classToDOMMap]);
+  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElementsForFiltering, variants, classToDOMMap]);
 
   // Group classes by category
   const groupedClasses = useMemo(() => {
@@ -443,6 +521,64 @@ export function ClassSelectionModal({
       }
       return next;
     });
+  };
+
+  // DOM element collapse/expand handlers
+  const toggleDOMElement = (index: number) => {
+    setCollapsedDOMElements(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllDOMElements = () => {
+    const indicesWithChildren = currentChildElements
+      .map((elem, index) => {
+        const nextElem = currentChildElements[index + 1];
+        const hasChildren = nextElem && nextElem.depth > elem.depth;
+        return hasChildren ? index : -1;
+      })
+      .filter(index => index !== -1);
+    
+    if (collapsedDOMElements.size > 0) {
+      // Expand all - clear collapsed set
+      setCollapsedDOMElements(new Set());
+    } else {
+      // Collapse all - add all elements that have children
+      setCollapsedDOMElements(new Set(indicesWithChildren));
+    }
+  };
+
+  // Check if an element has children
+  const hasChildren = (elem: DOMElement, index: number): boolean => {
+    const nextElem = currentChildElements[index + 1];
+    return nextElem ? nextElem.depth > elem.depth : false;
+  };
+
+  // Check if element should be visible (parent not collapsed)
+  const isElementVisible = (elem: DOMElement, index: number): boolean => {
+    // Root elements are always visible
+    if (elem.depth === 0) {
+      return true;
+    }
+    
+    // Check if any parent is collapsed by walking backwards
+    for (let i = index - 1; i >= 0; i--) {
+      const potentialParent = currentChildElements[i];
+      if (potentialParent.depth < elem.depth) {
+        if (collapsedDOMElements.has(i)) {
+          return false;
+        }
+        // If we reach a root element, stop checking
+        if (potentialParent.depth === 0) break;
+      }
+    }
+    return true;
   };
 
   // Sidebar resize handlers
@@ -497,6 +633,7 @@ export function ClassSelectionModal({
               onChange={(e) => {
                 setSelectedVariant(e.target.value || null);
                 setSelectedDOMElement(null); // Reset DOM selection when variant changes
+                setSelectedDOMElementIndex(null);
               }}
             >
               <option value="">All Variants</option>
@@ -509,33 +646,99 @@ export function ClassSelectionModal({
           </div>
           
           {/* DOM Elements List */}
-          <div className="sidebar-header">DOM Elements</div>
+          <div className="sidebar-header">
+            <div className="sidebar-header-left">
+              <button 
+                className="collapse-all-btn"
+                onClick={() => toggleAllDOMElements()}
+                title={collapsedDOMElements.size > 0 ? "Expand All" : "Collapse All"}
+              >
+                {collapsedDOMElements.size > 0 ? "▶" : "▼"}
+              </button>
+              <span>DOM</span>
+            </div>
+            <div className="sidebar-header-right">
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={multiSelectSameElements}
+                  onChange={(e) => setMultiSelectSameElements(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+              <span 
+                className="toggle-label"
+                title="When enabled, clicking an element selects all instances with same name and parent hierarchy"
+              >
+                Multi-select
+              </span>
+            </div>
+          </div>
           <div className="dom-elements-list">
             <button
               className={`dom-item ${selectedDOMElement === null ? "active" : ""}`}
-              onClick={() => setSelectedDOMElement(null)}
+              onClick={() => {
+                setSelectedDOMElement(null);
+                setSelectedDOMElementIndex(null);
+              }}
             >
               All Elements
               <span className="dom-count">{extractedClasses.length}</span>
             </button>
             
             {/* DOM elements - includes variant root + children, all from RAW JSON */}
-            {currentChildElements.map((elem) => {
-              const count = elementClassCounts.get(elem.name) || 0;
+            {currentChildElements.map((elem, index) => {
+              // Check if element should be visible based on parent collapse state
+              if (!isElementVisible(elem, index)) return null;
+              
+              const count = elementClassCounts.get(elem.normalizedName) || 0;
+              const isCollapsed = collapsedDOMElements.has(index);
+              const elementHasChildren = hasChildren(elem, index);
+              const isRoot = elem.depth === 0;
+              
+              // Check if this element should be marked as active
+              let isActive = false;
+              if (!multiSelectSameElements) {
+                // In single-select mode, only highlight the exact clicked element
+                isActive = selectedDOMElementIndex === index;
+              } else {
+                // In multi-select mode, highlight all elements with same name (ignoring parent structure)
+                if (selectedDOMElementIndex !== null) {
+                  const matchingIndices = findMatchingElements(selectedDOMElementIndex);
+                  isActive = matchingIndices.includes(index);
+                }
+              }
+              
               // Apply subtle indentation based on depth (12px per level)
               const indentStyle = {
                 paddingLeft: `${12 + elem.depth * 12}px`
               };
+              
               return (
                 <button
-                  key={elem.name}
-                  className={`dom-item ${selectedDOMElement === elem.name ? "active" : ""}`}
-                  onClick={() => setSelectedDOMElement(elem.name)}
+                  key={`${index}-${elem.normalizedName}`}
+                  className={`dom-item ${isActive ? "active" : ""} ${isRoot ? "root-element" : ""}`}
+                  onClick={() => {
+                    setSelectedDOMElement(elem.normalizedName);
+                    setSelectedDOMElementIndex(index);
+                  }}
                   style={indentStyle}
                   data-depth={elem.depth}
+                  title={elem.name}
                 >
                   <span className="dom-name">
-                    {elem.depth > 0 && <span className="tree-indent">└ </span>}
+                    {elementHasChildren && (
+                      <span 
+                        className="chevron"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDOMElement(index);
+                        }}
+                      >
+                        {isCollapsed ? "▶" : "▼"}
+                      </span>
+                    )}
+                    {!elementHasChildren && elem.depth > 0 && <span className="tree-indent">└ </span>}
                     {elem.name}
                   </span>
                   <span className="dom-count">{count}</span>

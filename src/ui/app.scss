@@ -247,7 +247,7 @@ $code-error: #f38ba8;
   max-width: 400px;
   min-height: 0;
   overflow: hidden;
-  padding-left: $spacing-2;
+  padding: 0 $spacing-2;
 
   .selection-summary {
     flex: 1;
@@ -256,7 +256,6 @@ $code-error: #f38ba8;
     gap: $spacing-2-5;
     width: 100%;
     min-height: 0;
-    overflow: hidden;
 
     .component-name {
       flex-shrink: 0;
@@ -290,6 +289,182 @@ $code-error: #f38ba8;
         margin: 0;
         line-height: $font-leading-5;
         word-break: break-word;
+      }
+    }
+
+    .extractor-tabs {
+      flex-shrink: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: $spacing-1;
+      width: 100%;
+      background: $fill-neutral-default;
+      border: $border-width-1 solid $stroke-neutral;
+      border-radius: $radius-md;
+      padding: $spacing-1;
+      box-sizing: border-box;
+
+      .extractor-tab {
+        padding: $spacing-1 $spacing-2;
+        background: transparent;
+        border: none;
+        border-radius: calc($radius-md - 2px);
+        cursor: pointer;
+        font-family: $font-sans;
+        font-size: $font-size-xs;
+        font-weight: $font-weight-normal;
+        line-height: $font-leading-4;
+        color: $foreground-neutral;
+        letter-spacing: $font-tracking-normal;
+        transition: all 0.2s;
+        white-space: nowrap;
+        text-align: center;
+        width: 100%;
+        box-sizing: border-box;
+
+        &:hover:not(:disabled):not(.active) {
+          background: rgba($fill-accent-default, 0.1);
+        }
+
+        &.active {
+          background: $fill-accent-default;
+          color: $foreground-on-accent;
+          font-weight: 500;
+        }
+
+        &:disabled {
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+      }
+    }
+
+    .properties-summary {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-4;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: $spacing-1;
+
+      .properties-section {
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-2;
+
+        .properties-section-title {
+          margin: 0;
+          font-family: $font-mono;
+          font-size: $font-size-xs;
+          font-weight: $font-weight-normal;
+          line-height: $font-leading-4;
+          color: $foreground-muted;
+          letter-spacing: $font-tracking-normal;
+
+          .properties-count {
+            opacity: 0.6;
+          }
+        }
+
+        .properties-list {
+          display: flex;
+          flex-direction: column;
+          gap: $spacing-2;
+
+          .property-item {
+            display: flex;
+            flex-direction: column;
+            gap: $spacing-1;
+            padding: $spacing-2;
+            background: $fill-neutral-default;
+            border: $border-width-1 solid $stroke-neutral;
+            border-radius: $radius-md;
+
+            .property-name {
+              font-family: $font-mono;
+              font-size: $font-size-xs;
+              font-weight: 500;
+              line-height: $font-leading-4;
+              color: $foreground-neutral;
+            }
+
+            .property-type {
+              font-family: $font-mono;
+              font-size: 10px;
+              line-height: 1.2;
+              color: $foreground-muted;
+              text-transform: uppercase;
+            }
+
+            .property-values {
+              display: flex;
+              flex-wrap: wrap;
+              gap: $spacing-1;
+              margin-top: $spacing-1;
+
+              .property-value {
+                display: inline-block;
+                padding: 2px 6px;
+                background: rgba($fill-accent-default, 0.1);
+                color: $fill-accent-default;
+                font-family: $font-mono;
+                font-size: 10px;
+                line-height: 1.4;
+                border-radius: 3px;
+              }
+            }
+          }
+        }
+
+        .variants-list {
+          display: flex;
+          flex-direction: column;
+          gap: $spacing-2;
+
+          .variant-item {
+            display: flex;
+            flex-direction: column;
+            gap: $spacing-1;
+            padding: $spacing-2;
+            background: $fill-neutral-default;
+            border: $border-width-1 solid $stroke-neutral;
+            border-radius: $radius-md;
+            font-size: $font-size-xs;
+
+            .variant-name {
+              font-family: $font-mono;
+              font-size: 11px;
+              font-weight: 500;
+              line-height: 1.3;
+              color: $foreground-neutral;
+              word-break: break-word;
+            }
+
+            .variant-props {
+              display: flex;
+              flex-direction: column;
+              gap: 2px;
+
+              .variant-prop {
+                display: flex;
+                gap: $spacing-1;
+                font-family: $font-mono;
+                font-size: 10px;
+                line-height: 1.4;
+
+                .variant-prop-key {
+                  color: $foreground-muted;
+                }
+
+                .variant-prop-value {
+                  color: $fill-accent-default;
+                  font-weight: 500;
+                }
+              }
+            }
+          }
+        }
       }
     }
 

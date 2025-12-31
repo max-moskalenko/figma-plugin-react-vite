@@ -200,10 +200,15 @@ function ClassRow({ extractedClass, onToggle }: ClassRowProps) {
             onMouseLeave={() => setShowTooltip(false)}
           >
             {displayElements.map((el, i) => (
-              <span key={i} className={`dom-badge ${isUsedInVariant ? 'muted' : ''}`}>{el}</span>
+              <span key={i} className={`dom-badge ${isUsedInVariant ? 'muted' : ''}`} title={el}>{el}</span>
             ))}
             {remainingCount > 0 && (
-              <span className={`dom-badge more ${isUsedInVariant ? 'muted' : ''}`}>+{remainingCount}</span>
+              <span 
+                className={`dom-badge more ${isUsedInVariant ? 'muted' : ''}`}
+                title={`${remainingCount} more: ${domElements.slice(2).join(', ')}`}
+              >
+                +{remainingCount}
+              </span>
             )}
             {showTooltip && domElements.length > 2 && (
               <div className="dom-tooltip">

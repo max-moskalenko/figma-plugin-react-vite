@@ -184,6 +184,9 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
     }
 
     .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       padding: $spacing-2 $spacing-3;
       font-size: $font-size-xs;
       font-weight: 600;
@@ -192,6 +195,93 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
       color: $foreground-muted;
       border-bottom: $border-width-1 solid $stroke-neutral;
       flex-shrink: 0;
+
+      .sidebar-header-left {
+        display: flex;
+        align-items: center;
+        gap: $spacing-2;
+      }
+
+      .sidebar-header-right {
+        display: flex;
+        align-items: center;
+        gap: $spacing-1;
+      }
+
+      .collapse-all-btn {
+        background: transparent;
+        border: none;
+        color: $foreground-muted;
+        font-size: 10px;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+
+        &:hover {
+          background: rgba($fill-accent-default, 0.1);
+          color: $fill-accent-default;
+        }
+
+        &:active {
+          transform: scale(0.95);
+        }
+      }
+
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 28px;
+        height: 16px;
+        flex-shrink: 0;
+
+        input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+
+          &:checked + .toggle-slider {
+            background-color: $fill-accent-default;
+          }
+
+          &:checked + .toggle-slider:before {
+            transform: translateX(12px);
+          }
+        }
+
+        .toggle-slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: $stroke-neutral;
+          transition: 0.2s;
+          border-radius: 16px;
+
+          &:before {
+            position: absolute;
+            content: "";
+            height: 12px;
+            width: 12px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: 0.2s;
+            border-radius: 50%;
+          }
+        }
+      }
+
+      .toggle-label {
+        font-size: $font-size-xs;
+        font-weight: 500;
+        text-transform: none;
+        letter-spacing: 0;
+        color: $foreground-neutral;
+        cursor: pointer;
+      }
     }
 
     .dom-elements-list {
@@ -233,8 +323,31 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0; // Allow text to truncate
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        
+        .chevron {
+          flex-shrink: 0;
+          width: 14px;
+          height: 14px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 8px;
+          color: $foreground-muted;
+          cursor: pointer;
+          border-radius: 4px;
+          transition: all 0.15s ease;
+
+          &:hover {
+            background: rgba($fill-accent-default, 0.15);
+            color: $fill-accent-default;
+          }
+        }
         
         .tree-indent {
+          flex-shrink: 0;
           color: $foreground-muted;
           opacity: 0.5;
           margin-right: 4px;
@@ -264,6 +377,28 @@ $font-mono: "Roboto Mono", "Monaco", "Menlo", monospace;
         .dom-count {
           color: $fill-accent-default;
           background: rgba($fill-accent-default, 0.15);
+        }
+      }
+
+      // Root element styling with violet color
+      &.root-element {
+        .dom-name {
+          color: #8b5cf6; // Violet color
+          font-weight: 600;
+        }
+
+        &:hover {
+          background: rgba(139, 92, 246, 0.05);
+        }
+
+        &.active {
+          background: rgba(139, 92, 246, 0.1);
+          color: #8b5cf6;
+
+          .dom-count {
+            color: #8b5cf6;
+            background: rgba(139, 92, 246, 0.15);
+          }
         }
       }
     }

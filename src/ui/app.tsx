@@ -10,6 +10,7 @@ import { LeftNavigation, ToolType } from "@ui/components/shared/LeftNavigation";
 import { CVATool, CVAProvider } from "@ui/components/cva";
 
 type OutputFormat = "css" | "tailwind" | "raw";
+type ExtractorTab = "dom-styles" | "component-properties";
 
 function App() {
   // Navigation state
@@ -22,6 +23,8 @@ function App() {
   const [componentName, setComponentName] = useState<string>("Component name");
   const [componentType, setComponentType] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [copiedProperties, setCopiedProperties] = useState(false);
+  const [activeExtractorTab, setActiveExtractorTab] = useState<ExtractorTab>("dom-styles");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("css");
   const [annotationsEnabled, setAnnotationsEnabled] = useState(true);
   const [annotationFormat, setAnnotationFormat] = useState<AnnotationFormat>("html");
@@ -447,6 +450,118 @@ function App() {
     };
   }, [exportDropdownOpen]);
 
+  // Format component properties as code string
+  const formatComponentProperties = (): string => {
+    if (!result?.componentProperties) return '';
+    
+    const { definitions, variants, description, documentationLinks } = result.componentProperties;
+    
+    let output = '';
+    
+    // Add description as a comment at the top if available
+    if (description) {
+      output += '/**\n';
+      output += ' * COMPONENT DESCRIPTION\n';
+      output += ' * ' + '='.repeat(50) + '\n';
+      output += ' * \n';
+      // Split description into lines and add comment formatting
+      const descLines = description.split('\n');
+      descLines.forEach(line => {
+        output += ' * ' + line + '\n';
+      });
+      output += ' */\n\n';
+    }
+    
+    // Add documentation links as comments if available
+    if (documentationLinks && documentationLinks.length > 0) {
+      output += '/**\n';
+      output += ' * DOCUMENTATION LINKS\n';
+      output += ' * ' + '='.repeat(50) + '\n';
+      documentationLinks.forEach(link => {
+        output += ' * ' + (link.title ? `${link.title}: ` : '') + link.url + '\n';
+      });
+      output += ' */\n\n';
+    }
+    
+    // Add separator before properties
+    if (description || (documentationLinks && documentationLinks.length > 0)) {
+      output += '// ' + '='.repeat(50) + '\n';
+      output += '// PROPERTIES & VARIANTS\n';
+      output += '// ' + '='.repeat(50) + '\n\n';
+    }
+    
+    const jsonOutput: any = {
+      definitions,
+      variants,
+    };
+    
+    output += JSON.stringify(jsonOutput, null, 2);
+    
+    return output;
+  };
+
+  // Copy component properties to clipboard
+  const handleCopyProperties = async () => {
+    if (!result?.componentProperties) return;
+    
+    const textToCopy = formatComponentProperties();
+    
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-999999px';
+        textarea.style.top = '-999999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        
+        try {
+          const successful = document.execCommand('copy');
+          if (!successful) {
+            throw new Error('execCommand copy failed');
+          }
+        } finally {
+          document.body.removeChild(textarea);
+        }
+      }
+      
+      setCopiedProperties(true);
+      setTimeout(() => {
+        setCopiedProperties(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy properties:", err);
+      setError("Failed to copy to clipboard. Please select and copy manually.");
+    }
+  };
+
+  // Export component properties to file
+  const handleExportProperties = async () => {
+    if (!result?.componentProperties) return;
+    
+    const safeName = componentName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'component';
+    const content = formatComponentProperties();
+    
+    try {
+      const blob = new Blob([content], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeName}-properties.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to export properties:", err);
+      setError("Failed to export properties.");
+    }
+  };
+
   const currentUsedVariables = getCurrentUsedVariables();
 
   /**
@@ -473,6 +588,14 @@ function App() {
     // TSX comments: {/* ... */}
     const tsxCommentRegex = /(\{\/\*[\s\S]*?\*\/\})/g;
     escapedCode = escapedCode.replace(tsxCommentRegex, '<span class="code-annotation">$1</span>');
+    
+    // Block comments: /* ... */ or /** ... */
+    const blockCommentRegex = /(\/\*\*?[\s\S]*?\*\/)/g;
+    escapedCode = escapedCode.replace(blockCommentRegex, '<span class="code-annotation">$1</span>');
+    
+    // Single-line comments: // ...
+    const singleLineCommentRegex = /(\/\/[^\n]*)/g;
+    escapedCode = escapedCode.replace(singleLineCommentRegex, '<span class="code-annotation">$1</span>');
     
     // 1. Highlight Tailwind arbitrary values: word-[value] or word-prefix-[value]
     // Examples: w-[100px], h-[50px], p-[12px], text-[#ffffff]
@@ -506,6 +629,10 @@ function App() {
     return escapedCode;
   };
 
+  // Check if component properties are available
+  const hasComponentProperties = result?.componentProperties && 
+    result.componentProperties.definitions.length > 0;
+
   // Render Extractor Tool content
   const renderExtractorTool = () => (
     <>
@@ -517,7 +644,11 @@ function App() {
             </p>
           ) : result ? (
             <pre className="code-output">
-              <code dangerouslySetInnerHTML={{ __html: highlightArbitraryValues(getCurrentStylesheet()) }} />
+              <code dangerouslySetInnerHTML={{ __html: 
+                activeExtractorTab === "dom-styles" 
+                  ? highlightArbitraryValues(getCurrentStylesheet())
+                  : highlightArbitraryValues(formatComponentProperties())
+              }} />
             </pre>
           ) : (
             <p className="code-placeholder">
@@ -540,186 +671,284 @@ function App() {
             {componentType && <span className="component-type-badge">{componentType}</span>}
             <p>{componentName}</p>
           </div>
+
+          {/* Tab selector - only show if component properties available */}
+          {hasComponentProperties && (
+            <div className="extractor-tabs">
+              <button
+                className={`extractor-tab ${activeExtractorTab === "dom-styles" ? "active" : ""}`}
+                onClick={() => setActiveExtractorTab("dom-styles")}
+                disabled={loading}
+              >
+                DOM & Styles
+              </button>
+              <button
+                className={`extractor-tab ${activeExtractorTab === "component-properties" ? "active" : ""}`}
+                onClick={() => setActiveExtractorTab("component-properties")}
+                disabled={loading}
+              >
+                Properties
+              </button>
+            </div>
+          )}
           
-          <div className="format-toggle">
-            <p className="format-toggle-label">Output Format</p>
-            <div className="format-options format-options-horizontal">
-              <label className={`format-option ${outputFormat === "css" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                <input
-                  type="radio"
-                  name="format"
-                  value="css"
-                  checked={outputFormat === "css"}
-                  onChange={() => setOutputFormat("css")}
-                  disabled={loading}
-                />
-                <span>CSS</span>
-              </label>
-              <label className={`format-option ${outputFormat === "tailwind" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                <input
-                  type="radio"
-                  name="format"
-                  value="tailwind"
-                  checked={outputFormat === "tailwind"}
-                  onChange={() => setOutputFormat("tailwind")}
-                  disabled={loading}
-                />
-                <span>TW</span>
-              </label>
-              <label className={`format-option ${outputFormat === "raw" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                <input
-                  type="radio"
-                  name="format"
-                  value="raw"
-                  checked={outputFormat === "raw"}
-                  onChange={() => setOutputFormat("raw")}
-                  disabled={loading}
-                />
-                <span>Raw</span>
-              </label>
+          {/* Show format toggle only on DOM & Styles tab */}
+          {activeExtractorTab === "dom-styles" && (
+            <div className="format-toggle">
+              <p className="format-toggle-label">Output Format</p>
+              <div className="format-options format-options-horizontal">
+                <label className={`format-option ${outputFormat === "css" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="format"
+                    value="css"
+                    checked={outputFormat === "css"}
+                    onChange={() => setOutputFormat("css")}
+                    disabled={loading}
+                  />
+                  <span>CSS</span>
+                </label>
+                <label className={`format-option ${outputFormat === "tailwind" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="format"
+                    value="tailwind"
+                    checked={outputFormat === "tailwind"}
+                    onChange={() => setOutputFormat("tailwind")}
+                    disabled={loading}
+                  />
+                  <span>TW</span>
+                </label>
+                <label className={`format-option ${outputFormat === "raw" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
+                  <input
+                    type="radio"
+                    name="format"
+                    value="raw"
+                    checked={outputFormat === "raw"}
+                    onChange={() => setOutputFormat("raw")}
+                    disabled={loading}
+                  />
+                  <span>Raw</span>
+                </label>
+              </div>
             </div>
-          </div>
+          )}
           
-          <div className="options-row">
-            <div className="option-item">
-              <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={annotationsEnabled}
-                  onChange={(e) => setAnnotationsEnabled(e.target.checked)}
-                  disabled={loading}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-              <span className="toggle-label">Annotations</span>
-              {annotationsEnabled && (
-                <select
-                  value={annotationFormat}
-                  onChange={(e) => setAnnotationFormat(e.target.value as AnnotationFormat)}
-                  disabled={loading}
-                  className="inline-select"
-                >
-                  <option value="html">HTML</option>
-                  <option value="tsx">TSX</option>
-                </select>
-              )}
-            </div>
-            <div className="option-item">
-              <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={prettifyEnabled}
-                  onChange={(e) => setPrettifyEnabled(e.target.checked)}
-                  disabled={loading}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-              <span className="toggle-label">Prettify</span>
-            </div>
-            <div className="option-item">
-              <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={excludeZeroValues}
-                  onChange={(e) => setExcludeZeroValues(e.target.checked)}
-                  disabled={loading}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-              <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
-            </div>
-          </div>
-          
-          {(() => {
-            const allVars = getAllVariablesWithUsage();
-            const groupedVars = categorizeVariables(allVars);
-            return allVars.length > 0 && (
-              <div className="variables-list">
-                <p className="variables-title">
-                  Used vars <span className="variables-count">({allVars.length})</span>
+          {/* Show options and variables only on DOM & Styles tab */}
+          {activeExtractorTab === "dom-styles" && (
+            <>
+              <div className="options-row">
+                <div className="option-item">
+                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={annotationsEnabled}
+                      onChange={(e) => setAnnotationsEnabled(e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <span className="toggle-label">Annotations</span>
+                  {annotationsEnabled && (
+                    <select
+                      value={annotationFormat}
+                      onChange={(e) => setAnnotationFormat(e.target.value as AnnotationFormat)}
+                      disabled={loading}
+                      className="inline-select"
+                    >
+                      <option value="html">HTML</option>
+                      <option value="tsx">TSX</option>
+                    </select>
+                  )}
+                </div>
+                <div className="option-item">
+                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={prettifyEnabled}
+                      onChange={(e) => setPrettifyEnabled(e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <span className="toggle-label">Prettify</span>
+                </div>
+                <div className="option-item">
+                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                    <input
+                      type="checkbox"
+                      checked={excludeZeroValues}
+                      onChange={(e) => setExcludeZeroValues(e.target.checked)}
+                      disabled={loading}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
+                </div>
+              </div>
+              
+              {(() => {
+                const allVars = getAllVariablesWithUsage();
+                const groupedVars = categorizeVariables(allVars);
+                return allVars.length > 0 && (
+                  <div className="variables-list">
+                    <p className="variables-title">
+                      Used vars <span className="variables-count">({allVars.length})</span>
+                    </p>
+                    <div className="variables-wrapper">
+                      {groupedVars.map((group) => (
+                        <div key={group.category} className="variable-group">
+                          <div className="variable-group-header">{group.label}</div>
+                          {group.variables.map((v, index) => {
+                            const isInCurrentFormat = isVariableInCurrentFormat(v);
+                            const allFormats = v.usedInCss && v.usedInTailwind && v.usedInRaw;
+                            return (
+                              <div 
+                                key={index} 
+                                className={`variable-item ${!isInCurrentFormat ? "variable-item-dimmed" : ""} ${allFormats ? "variable-item-all" : ""}`}
+                              >
+                                <p>var({v.name})</p>
+                                <span className="variable-formats">
+                                  {v.usedInCss && <span className={`format-badge ${outputFormat === "css" ? "format-badge-active" : ""}`} title="Used in CSS output">C</span>}
+                                  {v.usedInTailwind && <span className={`format-badge ${outputFormat === "tailwind" ? "format-badge-active" : ""}`} title="Used in Tailwind output">T</span>}
+                                  {v.usedInRaw && <span className={`format-badge ${outputFormat === "raw" ? "format-badge-active" : ""}`} title="Used in Raw JSON output">R</span>}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {/* Show component properties summary on Component Properties tab */}
+          {activeExtractorTab === "component-properties" && result?.componentProperties && (
+            <div className="properties-summary">
+              <div className="properties-section">
+                <p className="properties-section-title">
+                  Properties <span className="properties-count">({result.componentProperties.definitions.length})</span>
                 </p>
-                <div className="variables-wrapper">
-                  {groupedVars.map((group) => (
-                    <div key={group.category} className="variable-group">
-                      <div className="variable-group-header">{group.label}</div>
-                      {group.variables.map((v, index) => {
-                        const isInCurrentFormat = isVariableInCurrentFormat(v);
-                        const allFormats = v.usedInCss && v.usedInTailwind && v.usedInRaw;
-                        return (
-                          <div 
-                            key={index} 
-                            className={`variable-item ${!isInCurrentFormat ? "variable-item-dimmed" : ""} ${allFormats ? "variable-item-all" : ""}`}
-                          >
-                            <p>var({v.name})</p>
-                            <span className="variable-formats">
-                              {v.usedInCss && <span className={`format-badge ${outputFormat === "css" ? "format-badge-active" : ""}`} title="Used in CSS output">C</span>}
-                              {v.usedInTailwind && <span className={`format-badge ${outputFormat === "tailwind" ? "format-badge-active" : ""}`} title="Used in Tailwind output">T</span>}
-                              {v.usedInRaw && <span className={`format-badge ${outputFormat === "raw" ? "format-badge-active" : ""}`} title="Used in Raw JSON output">R</span>}
-                            </span>
-                          </div>
-                        );
-                      })}
+                <div className="properties-list">
+                  {result.componentProperties.definitions.map((def, index) => (
+                    <div key={index} className="property-item">
+                      <div className="property-name">{def.name}</div>
+                      <div className="property-type">{def.type}</div>
+                      {def.variantOptions && def.variantOptions.length > 0 && (
+                        <div className="property-values">
+                          {def.variantOptions.map((opt, i) => (
+                            <span key={i} className="property-value">{opt}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-            );
-          })()}
+
+              {result.componentProperties.variants.length > 0 && (
+                <div className="properties-section">
+                  <p className="properties-section-title">
+                    Variants <span className="properties-count">({result.componentProperties.variants.length})</span>
+                  </p>
+                  <div className="variants-list">
+                    {result.componentProperties.variants.map((variant, index) => (
+                      <div key={index} className="variant-item">
+                        <div className="variant-name">{variant.variantName}</div>
+                        <div className="variant-props">
+                          {Object.entries(variant.properties).map(([key, value]) => (
+                            <div key={key} className="variant-prop">
+                              <span className="variant-prop-key">{key}:</span>
+                              <span className="variant-prop-value">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="action-buttons">
-          <button
-            className="button button-secondary"
-            onClick={handleCopy}
-            disabled={!result || loading}
-          >
-            <p>{copied ? "Copied" : "Copy"}</p>
-          </button>
-          <div className="export-dropdown-container" ref={exportDropdownRef}>
-            <button
-              className="button button-secondary"
-              onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
-              disabled={!result || loading}
-            >
-              <p>Export</p>
-            </button>
-            {exportDropdownOpen && (
-              <div className="export-dropdown">
-                <div className="export-dropdown-header">Select formats</div>
-                <label className="export-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={exportFormats.css}
-                    onChange={(e) => setExportFormats(prev => ({ ...prev, css: e.target.checked }))}
-                  />
-                  <span>CSS</span>
-                </label>
-                <label className="export-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={exportFormats.tailwind}
-                    onChange={(e) => setExportFormats(prev => ({ ...prev, tailwind: e.target.checked }))}
-                  />
-                  <span>Tailwind</span>
-                </label>
-                <label className="export-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={exportFormats.raw}
-                    onChange={(e) => setExportFormats(prev => ({ ...prev, raw: e.target.checked }))}
-                  />
-                  <span>Raw JSON</span>
-                </label>
+          {activeExtractorTab === "dom-styles" ? (
+            <>
+              <button
+                className="button button-secondary"
+                onClick={handleCopy}
+                disabled={!result || loading}
+              >
+                <p>{copied ? "Copied" : "Copy"}</p>
+              </button>
+              <div className="export-dropdown-container" ref={exportDropdownRef}>
                 <button
-                  className="button button-primary export-btn"
-                  onClick={handleExport}
-                  disabled={!exportFormats.css && !exportFormats.tailwind && !exportFormats.raw}
+                  className="button button-secondary"
+                  onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                  disabled={!result || loading}
                 >
-                  <p>Download ZIP</p>
+                  <p>Export</p>
                 </button>
+                {exportDropdownOpen && (
+                  <div className="export-dropdown">
+                    <div className="export-dropdown-header">Select formats</div>
+                    <label className="export-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={exportFormats.css}
+                        onChange={(e) => setExportFormats(prev => ({ ...prev, css: e.target.checked }))}
+                      />
+                      <span>CSS</span>
+                    </label>
+                    <label className="export-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={exportFormats.tailwind}
+                        onChange={(e) => setExportFormats(prev => ({ ...prev, tailwind: e.target.checked }))}
+                      />
+                      <span>Tailwind</span>
+                    </label>
+                    <label className="export-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={exportFormats.raw}
+                        onChange={(e) => setExportFormats(prev => ({ ...prev, raw: e.target.checked }))}
+                      />
+                      <span>Raw JSON</span>
+                    </label>
+                    <button
+                      className="button button-primary export-btn"
+                      onClick={handleExport}
+                      disabled={!exportFormats.css && !exportFormats.tailwind && !exportFormats.raw}
+                    >
+                      <p>Download ZIP</p>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          ) : (
+            <>
+              <button
+                className="button button-secondary"
+                onClick={handleCopyProperties}
+                disabled={!result?.componentProperties || loading}
+              >
+                <p>{copiedProperties ? "Copied" : "Copy"}</p>
+              </button>
+              <button
+                className="button button-secondary"
+                onClick={handleExportProperties}
+                disabled={!result?.componentProperties || loading}
+              >
+                <p>Export</p>
+              </button>
+            </>
+          )}
         </div>
       </div>
     </>

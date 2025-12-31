@@ -990,6 +990,8 @@ export interface ExtractedVariantProperties {
 export interface ExtractedComponentPropertiesResult {
   definitions: ExtractedComponentProperty[];
   variants: ExtractedVariantProperties[];
+  description?: string;
+  documentationLinks?: Array<{ url: string; title?: string }>;
 }
 
 /**
@@ -1048,6 +1050,22 @@ export function extractComponentProperties(
     // Handle COMPONENT_SET - the main component with all variants
     if (node.type === "COMPONENT_SET") {
       const componentSet = node as ComponentSetNode;
+      
+      // Extract description if available
+      if ("description" in componentSet && componentSet.description) {
+        result.description = componentSet.description;
+      }
+      
+      // Extract documentation links if available
+      if ("documentationLinks" in componentSet && componentSet.documentationLinks) {
+        const links = (componentSet as any).documentationLinks;
+        if (Array.isArray(links) && links.length > 0) {
+          result.documentationLinks = links.map((link: any) => ({
+            url: link.uri || link.url || link,
+            title: link.title || link.name,
+          })).filter((link: any) => link.url);
+        }
+      }
       
       // Extract property definitions from componentPropertyDefinitions
       if ("componentPropertyDefinitions" in componentSet) {
@@ -1136,17 +1154,35 @@ export function extractComponentProperties(
             });
           }
         }
+        
+        // Extract description if available
+        if ("description" in component && component.description) {
+          result.description = component.description;
+        }
+        
+        // Extract documentation links if available
+        if ("documentationLinks" in component && component.documentationLinks) {
+          const links = (component as any).documentationLinks;
+          if (Array.isArray(links) && links.length > 0) {
+            result.documentationLinks = links.map((link: any) => ({
+              url: link.uri || link.url || link,
+              title: link.title || link.name,
+            })).filter((link: any) => link.url);
+          }
+        }
       }
     }
     // Handle INSTANCE - get properties from the instance
     else if (node.type === "INSTANCE") {
       const instance = node as InstanceNode;
       
-      // Get the main component to extract definitions
+      // Get the main component to extract definitions and description
       if (instance.mainComponent) {
         const mainResult = extractComponentProperties(instance.mainComponent);
         if (mainResult) {
           result.definitions = mainResult.definitions;
+          result.description = mainResult.description;
+          result.documentationLinks = mainResult.documentationLinks;
         }
       }
       

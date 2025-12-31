@@ -58,6 +58,7 @@ export function VariantCard({ variant }: VariantCardProps) {
     toggleVariantPrefixes,
     addPropertyValue,
     removePropertyValue,
+    duplicatePropertyValue,
     renamePropertyValue,
     setPropertyValues,
     addPrefixSlot,
@@ -443,15 +444,29 @@ export function VariantCard({ variant }: VariantCardProps) {
                     )}
                   </td>
                   <td className="actions-cell">
-                    {variant.showPrefixes && row.canRemoveSlot && (
-                      <button
-                        className="remove-slot-btn"
-                        onClick={() => removePrefixSlot(variant.id, property.id, row.valueId, row.prefixSlotId)}
-                        title="Remove prefix slot"
-                      >
-                        ×
-                      </button>
-                    )}
+                    <div>
+                      {row.isFirstInGroup && (
+                        <button
+                          className="duplicate-value-btn"
+                          onClick={() => duplicatePropertyValue(variant.id, property.id, row.valueId)}
+                          title="Duplicate value with all classes"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+                            <path d="M2 2h6v1.5H2.5v6H1V2.5A.5.5 0 0 1 1.5 2H2z" fill="currentColor"/>
+                          </svg>
+                        </button>
+                      )}
+                      {variant.showPrefixes && row.canRemoveSlot && (
+                        <button
+                          className="remove-slot-btn"
+                          onClick={() => removePrefixSlot(variant.id, property.id, row.valueId, row.prefixSlotId)}
+                          title="Remove prefix slot"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

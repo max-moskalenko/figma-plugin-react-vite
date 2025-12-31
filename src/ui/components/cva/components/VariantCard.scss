@@ -157,7 +157,7 @@ $shadow-card:
     .col-value { width: 140px; }
     .col-prefix { width: 110px; }
     .col-classes { }
-    .col-actions { width: 30px; }
+    .col-actions { width: 50px; }
 
     td {
       padding: $spacing-1 $spacing-2;
@@ -357,24 +357,59 @@ $shadow-card:
     // Actions cell
     .actions-cell {
       text-align: center;
-
-      .remove-slot-btn {
-        width: 18px;
-        height: 18px;
-        padding: 0;
-        font-size: 12px;
-        color: $foreground-muted;
-        background: transparent;
-        border: none;
-        border-radius: $radius-md;
-        cursor: pointer;
-        display: inline-flex;
+      vertical-align: middle;
+      padding: $spacing-1 $spacing-2;
+      
+      > div {
+        display: flex;
         align-items: center;
         justify-content: center;
+        gap: $spacing-1;
 
-        &:hover {
-          color: #dc2626;
-          background: rgba(#dc2626, 0.08);
+        .duplicate-value-btn {
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          color: $foreground-muted;
+          background: transparent;
+          border: none;
+          border-radius: $radius-md;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+
+          &:hover {
+            color: $fill-accent-default;
+            background: rgba($fill-accent-default, 0.08);
+          }
+
+          svg {
+            width: 14px;
+            height: 14px;
+          }
+        }
+
+        .remove-slot-btn {
+          width: 18px;
+          height: 18px;
+          padding: 0;
+          font-size: 12px;
+          color: $foreground-muted;
+          background: transparent;
+          border: none;
+          border-radius: $radius-md;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+
+          &:hover {
+            color: #dc2626;
+            background: rgba(#dc2626, 0.08);
+          }
         }
       }
     }

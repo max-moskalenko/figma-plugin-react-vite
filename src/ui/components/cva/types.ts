@@ -185,6 +185,7 @@ export interface CVAActions {
   // Property values
   addPropertyValue: (variantId: string, propertyId: string) => void;
   removePropertyValue: (variantId: string, propertyId: string, valueId: string) => void;
+  duplicatePropertyValue: (variantId: string, propertyId: string, valueId: string) => void;
   renamePropertyValue: (variantId: string, propertyId: string, valueId: string, name: string) => void;
   
   // Prefix slots within a value

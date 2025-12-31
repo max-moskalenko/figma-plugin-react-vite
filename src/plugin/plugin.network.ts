@@ -373,6 +373,8 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
             variantName: v.variantName,
             properties: v.properties,
           })),
+          description: props.description,
+          documentationLinks: props.documentationLinks,
         };
         break; // Use the first node with component properties
       }

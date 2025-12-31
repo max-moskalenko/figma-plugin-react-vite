@@ -305,54 +305,102 @@ interface ClassWithDOMElements {
 }
 
 /**
+ * Normalize element name to match Tailwind format
+ * Same logic as ClassSelectionModal: lowercase kebab-case
+ */
+function normalizeElementName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')  // Replace non-alphanumeric with hyphens
+    .replace(/^-+|-+$/g, '');      // Remove leading/trailing hyphens
+}
+
+/**
  * Extract classes from Tailwind stylesheet with DOM element associations
  * 
- * Parses the generated HTML to extract all CSS classes and associate them
- * with the DOM elements they appear on. This enables filtering classes by
- * element in the class selection modal.
+ * Parses RAW JSON to build a map of normalized element names, then associates
+ * Tailwind classes with their actual DOM elements (not generic "variant"/"root" labels).
  * 
  * EXTRACTION PROCESS:
- * 1. Find all className="..." and class="..." attributes in the HTML
- * 2. Split class string into individual classes
- * 3. Identify the element name (first class if it looks like an element name)
- * 4. Map each utility class to the element(s) it appears on
- * 5. Filter out Figma variant names
+ * 1. Parse RAW JSON to get actual DOM element names
+ * 2. Build a map of normalized names (matching Tailwind's first-class convention)
+ * 3. Parse Tailwind HTML to extract classes
+ * 4. Match each element (first class) to its normalized name from RAW
+ * 5. Associate utility classes with their actual element names
  * 
  * ELEMENT IDENTIFICATION:
- * - If first class looks like element name → use it as element
- * - If first class is a variant name → label as "variant"
- * - Otherwise → label as "root"
+ * - First class in className → normalized element name from RAW JSON
+ * - Matches against actual element names (not generic labels)
  * 
  * RESULT:
- * Each class is mapped to an array of element names it appears on.
- * Example: "p-4" might appear on ["button-root", "label-text"]
+ * Each class is mapped to actual element names from the DOM structure.
+ * Example: "p-4" might appear on ["button-slot-left", "leftslotwithlabel"]
  * 
- * @param stylesheet - HTML+classes string from Tailwind generator
+ * @param tailwindSheet - HTML+classes string from Tailwind generator
+ * @param rawSheet - JSON string from RAW extractor
  * @returns Array of {className, domElements[]} objects
  */
-function extractClassesWithDOMElements(stylesheet: string): ClassWithDOMElements[] {
+function extractClassesWithDOMElements(tailwindSheet: string, rawSheet: string): ClassWithDOMElements[] {
   const classMap = new Map<string, Set<string>>(); // className -> Set of domElements
   
-  // Match className="..." patterns
+  // Step 1: Parse RAW JSON to build element name map
+  const elementNameMap = new Map<string, string>(); // normalized -> original name
+  
+  try {
+    const rawNodes = JSON.parse(rawSheet);
+    
+    // Helper: recursively collect element names from RAW structure
+    const collectElementNames = (node: any, depth: number = 0): void => {
+      if (!node || !node.name) return;
+      
+      // Skip top-level containers
+      const shouldInclude = node.type !== "COMPONENT_SET" && !(node.type === "COMPONENT" && depth === 0);
+      
+      if (shouldInclude) {
+        const normalized = normalizeElementName(node.name);
+        if (normalized && !elementNameMap.has(normalized)) {
+          elementNameMap.set(normalized, node.name);
+        }
+      }
+      
+      // Recurse into children
+      if (node.children && Array.isArray(node.children)) {
+        node.children.forEach((child: any) => {
+          collectElementNames(child, depth + 1);
+        });
+      }
+    };
+    
+    // Process all root nodes
+    if (Array.isArray(rawNodes)) {
+      rawNodes.forEach(node => collectElementNames(node, 0));
+    }
+  } catch (e) {
+    console.warn("Failed to parse RAW JSON for element names:", e);
+  }
+  
+  // Step 2: Parse Tailwind HTML and map classes to elements
   const classNameRegex = /<\w+\s+(?:className|class)="([^"]+)"/g;
   let match;
   
-  while ((match = classNameRegex.exec(stylesheet)) !== null) {
+  while ((match = classNameRegex.exec(tailwindSheet)) !== null) {
     const classString = match[1];
     const allClasses = classString.split(/\s+/).filter(c => c.trim());
     
     if (allClasses.length === 0) continue;
     
-    // First class is often the element name
+    // First class is the element identifier (may be variant name or element name)
     const firstClass = allClasses[0];
     const styleClasses = allClasses.slice(1);
     
-    // Determine the element name
-    let elementName = 'root';
+    // Determine the actual element name from our map
+    let elementName = elementNameMap.get(firstClass) || firstClass;
+    
+    // If first class is a Figma variant name, use its normalized form as element
     if (isFigmaVariantName(firstClass)) {
-      // It's a variant wrapper, use "variant" or skip
-      elementName = 'variant';
-    } else if (isElementName(firstClass)) {
+      elementName = firstClass; // Use the variant wrapper name itself
+    } else if (elementNameMap.has(firstClass)) {
+      // Use the normalized name for matching (keep it lowercase kebab-case)
       elementName = firstClass;
     }
     
@@ -367,12 +415,12 @@ function extractClassesWithDOMElements(stylesheet: string): ClassWithDOMElements
       }
     });
     
-    // Also add first class if it's a style class (not element name)
+    // Also add first class if it's a utility class (not an element identifier)
     if (!isElementName(firstClass) && !isFigmaVariantName(firstClass)) {
       if (!classMap.has(firstClass)) {
         classMap.set(firstClass, new Set());
       }
-      classMap.get(firstClass)!.add('root');
+      classMap.get(firstClass)!.add(elementName);
     }
   }
   
@@ -727,7 +775,11 @@ export function useCVAState(): CVAState & CVAActions {
       }
 
       // Extract classes from Tailwind output with DOM element associations
-      const classesWithDOM = extractClassesWithDOMElements(result.tailwind.stylesheet);
+      // Pass both Tailwind HTML and RAW JSON to get actual element names
+      const classesWithDOM = extractClassesWithDOMElements(
+        result.tailwind.stylesheet,
+        result.raw?.stylesheet || "[]"
+      );
       
       // Create ExtractedClass objects with categorization and DOM elements
       const extractedClasses: ExtractedClass[] = classesWithDOM.map((item, index) => ({
@@ -1089,6 +1141,50 @@ export function useCVAState(): CVAState & CVAActions {
                 properties: v.properties.map(p =>
                   p.id === propertyId
                     ? { ...p, values: p.values.filter(val => val.id !== valueId) }
+                    : p
+                ),
+              }
+            : v
+        ),
+      },
+    }));
+  }, []);
+
+  const duplicatePropertyValue = useCallback((variantId: string, propertyId: string, valueId: string) => {
+    setState(prev => ({
+      ...prev,
+      config: {
+        ...prev.config,
+        variants: prev.config.variants.map(v =>
+          v.id === variantId
+            ? {
+                ...v,
+                properties: v.properties.map(p =>
+                  p.id === propertyId
+                    ? {
+                        ...p,
+                        values: (() => {
+                          const originalValue = p.values.find(val => val.id === valueId);
+                          if (!originalValue) return p.values;
+                          
+                          // Create deep copy of the value with all its prefixed classes
+                          const duplicatedValue: CVAPropertyValue = {
+                            id: generateId(), // New unique ID
+                            name: `${originalValue.name} copy`, // Append "copy" to name
+                            prefixedClasses: originalValue.prefixedClasses.map(pc => ({
+                              id: generateId(), // New unique ID for each prefix slot
+                              prefix: pc.prefix, // Keep same prefix
+                              classes: [...pc.classes], // Deep copy of classes array
+                            })),
+                          };
+                          
+                          // Insert duplicated value right after the original
+                          const originalIndex = p.values.findIndex(val => val.id === valueId);
+                          const newValues = [...p.values];
+                          newValues.splice(originalIndex + 1, 0, duplicatedValue);
+                          return newValues;
+                        })(),
+                      }
                     : p
                 ),
               }
@@ -1512,6 +1608,7 @@ export function useCVAState(): CVAState & CVAActions {
     setPropertyValues,
     addPropertyValue,
     removePropertyValue,
+    duplicatePropertyValue,
     renamePropertyValue,
     addPrefixSlot,
     removePrefixSlot,
