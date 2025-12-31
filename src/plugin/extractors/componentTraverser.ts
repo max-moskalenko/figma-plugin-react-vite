@@ -1,3 +1,11 @@
+/**
+ * Icon metadata for detected icon components
+ */
+export interface IconMetadata {
+  isIcon: boolean;
+  iconName: string;
+}
+
 export interface ExtractedNode {
   id: string;
   name: string;
@@ -7,6 +15,137 @@ export interface ExtractedNode {
   styles?: any;
   // Annotations/comments from Figma
   annotations?: string[];
+  // Icon metadata for detected icons
+  icon?: IconMetadata;
+}
+
+/**
+ * Extracts a clean icon name from a node.
+ * Uses parent COMPONENT_SET name for variants/instances, or the node's own name.
+ */
+function getIconName(node: SceneNode): string {
+  // For instances, try to get the parent component set name
+  if (node.type === "INSTANCE") {
+    const instance = node as InstanceNode;
+    const mainComponent = instance.mainComponent;
+    // If mainComponent's parent is a COMPONENT_SET, use that name
+    if (mainComponent?.parent?.type === "COMPONENT_SET") {
+      return mainComponent.parent.name;
+    }
+    return instance.name || "Icon";
+  }
+  
+  // For components, try parent COMPONENT_SET name
+  if (node.type === "COMPONENT") {
+    const component = node as ComponentNode;
+    if (component.parent?.type === "COMPONENT_SET") {
+      return component.parent.name;
+    }
+  }
+  
+  return node.name || "Icon";
+}
+
+/**
+ * Detects if a node is an icon by checking the isIcon component property.
+ * 
+ * Detection methods:
+ * - INSTANCE nodes: Check instance.componentProperties for isIcon=true
+ * - Variant COMPONENT nodes: Check parent COMPONENT_SET for isIcon property definition
+ * - Non-variant COMPONENT nodes: Check componentPropertyDefinitions for isIcon property
+ * 
+ * @param node - The Figma SceneNode to check
+ * @returns IconMetadata if node is an icon, null otherwise
+ */
+function detectIcon(node: SceneNode): IconMetadata | null {
+  // Check for INSTANCE nodes - use componentProperties directly
+  if (node.type === "INSTANCE") {
+    const instance = node as InstanceNode;
+    const instanceProps = instance.componentProperties;
+    
+    if (instanceProps) {
+      // Find isIcon property (case-insensitive)
+      const isIconEntry = Object.entries(instanceProps).find(
+        ([key]) => key.toLowerCase() === "isicon"
+      );
+      
+      if (isIconEntry) {
+        const [, propValue] = isIconEntry;
+        // componentProperties values have a 'value' field
+        // Value can be boolean true OR string "True" (for VARIANT type properties)
+        const rawValue = typeof propValue === 'object' && 'value' in propValue ? propValue.value : null;
+        const isIconTrue = rawValue === true || (typeof rawValue === 'string' && rawValue.toLowerCase() === 'true');
+        
+        if (isIconTrue) {
+          return {
+            isIcon: true,
+            iconName: getIconName(node),
+          };
+        }
+      }
+    }
+  }
+  
+  // Check for COMPONENT nodes
+  if (node.type === "COMPONENT") {
+    const component = node as ComponentNode;
+    
+    // For variant components (parent is COMPONENT_SET), check parent's property definitions
+    if (component.parent?.type === "COMPONENT_SET") {
+      const componentSet = component.parent as ComponentSetNode;
+      
+      try {
+        const props = componentSet.componentPropertyDefinitions;
+        
+        if (props) {
+          // Find isIcon property - check both BOOLEAN and VARIANT types
+          const isIconPropEntry = Object.entries(props).find(
+            ([key]) => key.toLowerCase() === "isicon"
+          );
+          
+          if (isIconPropEntry) {
+            // The variant name contains the property value like "isIcon=True"
+            // Parse the component name to get the actual value
+            const nameMatch = component.name.match(/isicon\s*=\s*(true|false)/i);
+            const isIconTrue = nameMatch && nameMatch[1].toLowerCase() === "true";
+            
+            if (isIconTrue) {
+              return {
+                isIcon: true,
+                iconName: getIconName(node),
+              };
+            }
+          }
+        }
+      } catch {
+        // Silently ignore errors checking component set
+      }
+      return null;
+    }
+    
+    // For non-variant components, check componentPropertyDefinitions directly
+    try {
+      if (component.componentPropertyDefinitions) {
+        const props = component.componentPropertyDefinitions;
+        
+        // Find isIcon property (case-insensitive)
+        const hasIsIconProp = Object.entries(props).some(
+          ([key, prop]) => prop.type === "BOOLEAN" && key.toLowerCase() === "isicon"
+        );
+        
+        if (hasIsIconProp) {
+          return {
+            isIcon: true,
+            iconName: component.name,
+          };
+        }
+      }
+    } catch {
+      // Silently ignore errors accessing component property definitions
+    }
+  }
+  
+  return null;
 }
 
 /**
@@ -45,15 +184,16 @@ function extractAnnotations(node: SceneNode): string[] {
  * 
  * TRAVERSAL PROCESS:
  * 1. Creates ExtractedNode with id, name, type, and annotations
- * 2. Recursively processes all children nodes
- * 3. Preserves the exact tree structure from Figma
- * 4. Extracts annotations (comments/notes) from nodes
+ * 2. Detects if node is an icon (via isIcon property)
+ * 3. Recursively processes all children nodes
+ * 4. Preserves the exact tree structure from Figma
  * 
  * NODE METADATA:
  * - id: Unique Figma node ID
  * - name: Node name from Figma
  * - type: Node type (FRAME, TEXT, COMPONENT, etc.)
  * - annotations: Array of annotation strings (comments attached to nodes)
+ * - icon: Icon metadata if node is detected as an icon
  * - children: Array of child ExtractedNode objects (recursive structure)
  * 
  * NOTE: Styles are NOT extracted here. The styles property is populated later
@@ -62,7 +202,7 @@ function extractAnnotations(node: SceneNode): string[] {
  * @param node - The Figma SceneNode to traverse
  * @returns ExtractedNode object representing this node and its children
  */
-export function traverseComponent(node: SceneNode): ExtractedNode {
+export async function traverseComponent(node: SceneNode): Promise<ExtractedNode> {
   const extracted: ExtractedNode = {
     id: node.id,
     name: node.name,
@@ -70,9 +210,17 @@ export function traverseComponent(node: SceneNode): ExtractedNode {
     annotations: extractAnnotations(node),
   };
 
+  // Detect if this node is an icon
+  const iconMetadata = detectIcon(node);
+  if (iconMetadata) {
+    extracted.icon = iconMetadata;
+  }
+
   // Recursively traverse children if the node has them
   if ("children" in node && node.children) {
-    extracted.children = node.children.map((child: SceneNode) => traverseComponent(child));
+    extracted.children = await Promise.all(
+      node.children.map((child: SceneNode) => traverseComponent(child))
+    );
   }
 
   return extracted;
@@ -92,7 +240,7 @@ export function traverseComponent(node: SceneNode): ExtractedNode {
  * @param selection - Array of selected Figma SceneNodes
  * @returns Array of ExtractedNode objects, one for each selected node
  */
-export function traverseSelection(selection: readonly SceneNode[]): ExtractedNode[] {
-  return selection.map((node) => traverseComponent(node));
+export async function traverseSelection(selection: readonly SceneNode[]): Promise<ExtractedNode[]> {
+  return await Promise.all(selection.map((node) => traverseComponent(node)));
 }
 

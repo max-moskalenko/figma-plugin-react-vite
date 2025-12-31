@@ -1,4 +1,4 @@
-import { PLUGIN, SelectionInfo, MultiFormatExtractionResult, AnnotationFormat } from "@common/networkSides";
+import { PLUGIN, SelectionInfo, MultiFormatExtractionResult, AnnotationFormat, IconExportMode, IconExportSettings } from "@common/networkSides";
 import { UI_CHANNEL } from "@ui/app.network";
 import { NetworkError } from "monorepo-networker";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -30,6 +30,10 @@ function App() {
   const [annotationFormat, setAnnotationFormat] = useState<AnnotationFormat>("html");
   const [prettifyEnabled, setPrettifyEnabled] = useState(true);
   const [excludeZeroValues, setExcludeZeroValues] = useState(true);
+  
+  // Icon export state
+  const [iconExportMode, setIconExportMode] = useState<IconExportMode>('none');
+  const [iconPackageName, setIconPackageName] = useState('@phosphor-icons/react');
   
   // Export dropdown state
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
@@ -323,11 +327,17 @@ function App() {
       // Determine effective annotation format (none if disabled)
       const effectiveAnnotationFormat = annotationsEnabled ? annotationFormat : "none";
       
-      // Extract all formats at once with annotation and prettify settings
+      // Build icon export settings
+      const iconSettings: IconExportSettings = {
+        mode: iconExportMode,
+        packageName: iconExportMode === 'npm-package' ? iconPackageName : undefined,
+      };
+      
+      // Extract all formats at once with annotation, prettify, and icon settings
       let extractionResult = await UI_CHANNEL.request(
         PLUGIN,
         "extractComponent",
-        [effectiveAnnotationFormat, prettifyEnabled]
+        [effectiveAnnotationFormat, prettifyEnabled, iconSettings]
       ) as MultiFormatExtractionResult;
       
       // Filter out zero-value classes if setting is enabled
@@ -784,6 +794,34 @@ function App() {
                     <span className="toggle-slider"></span>
                   </label>
                   <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
+                </div>
+                
+                {/* Icon Export Settings */}
+                <div className="icon-export-option">
+                  <label className="option-label">Icon export</label>
+                  <select
+                    value={iconExportMode}
+                    onChange={(e) => setIconExportMode(e.target.value as IconExportMode)}
+                    className="option-select"
+                    disabled={loading}
+                    title="How to export detected icon components"
+                  >
+                    <option value="none">None (default)</option>
+                    <option value="npm-package">NPM Package Import</option>
+                  </select>
+                  {iconExportMode === 'npm-package' && (
+                    <div className="sub-option">
+                      <input
+                        type="text"
+                        value={iconPackageName}
+                        onChange={(e) => setIconPackageName(e.target.value)}
+                        placeholder="@phosphor-icons/react"
+                        className="text-input"
+                        disabled={loading}
+                        title="NPM package name for icon imports"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               

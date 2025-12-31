@@ -8,6 +8,15 @@ export const UI = Networker.createSide("UI-side").listens<{
 // Annotation format options
 export type AnnotationFormat = "html" | "tsx" | "none";
 
+// Icon export mode options
+export type IconExportMode = 'none' | 'npm-package';
+
+// Icon export settings
+export interface IconExportSettings {
+  mode: IconExportMode;
+  packageName?: string; // e.g., '@phosphor-icons/react'
+}
+
 // Individual format output structure
 interface FormatOutput {
   html?: string;
@@ -42,6 +51,11 @@ export interface ComponentPropertiesResult {
   documentationLinks?: Array<{ url: string; title?: string }>;
 }
 
+// Class to DOM element mapping (className -> array of element names)
+export interface ClassToDOMMap {
+  [className: string]: string[];
+}
+
 // Multi-format extraction result
 export interface MultiFormatExtractionResult {
   css: FormatOutput;
@@ -51,6 +65,7 @@ export interface MultiFormatExtractionResult {
   variableMappings?: Array<{ name: string; value: any }>;
   usedVariables?: string[];
   componentProperties?: ComponentPropertiesResult;
+  classToDOMMap?: ClassToDOMMap; // Maps each Tailwind class to its DOM element(s)
 }
 
 // Selection info returned by getSelectionName
@@ -65,6 +80,6 @@ export const PLUGIN = Networker.createSide("Plugin-side").listens<{
   createRect(width: number, height: number): void;
   exportSelection(): Promise<string>;
   getSelectionName(): Promise<SelectionInfo>;
-  extractComponent(annotationFormat?: AnnotationFormat, prettify?: boolean): Promise<MultiFormatExtractionResult>;
+  extractComponent(annotationFormat?: AnnotationFormat, prettify?: boolean, iconSettings?: IconExportSettings): Promise<MultiFormatExtractionResult>;
   resizeWindow(width: number, height: number): void;
 }>();

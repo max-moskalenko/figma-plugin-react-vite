@@ -1,9 +1,10 @@
-import { PLUGIN, UI, AnnotationFormat } from "@common/networkSides";
+import { PLUGIN, UI, AnnotationFormat, IconExportSettings } from "@common/networkSides";
 import { traverseSelection } from "@plugin/extractors/componentTraverser";
 import { extractStyles, getAllVariables, extractComponentProperties } from "@plugin/extractors/styleExtractor";
 import { generateDOM } from "@common/domGenerator";
 import { generateTailwindDOM } from "@common/tailwindDomGenerator";
 import { generateRawJSON } from "@common/rawJsonGenerator";
+import { buildClassToDOMMap } from "@common/tailwindGenerator";
 
 export const PLUGIN_CHANNEL = PLUGIN.channelBuilder()
   .emitsTo(UI, (message) => {
@@ -184,15 +185,16 @@ PLUGIN_CHANNEL.registerMessageHandler("exportSelection", async () => {
  * 
  * Extraction process:
  * 1. Handles COMPONENT_SET nodes by extracting all component variants
- * 2. Traverses nodes to build tree structure
+ * 2. Traverses nodes to build tree structure (with icon detection)
  * 3. Recursively extracts styles (with variable resolution) and text content
  * 4. Generates all three output formats at once: CSS, Tailwind, and Raw JSON
  * 
  * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
  * @param prettify - Whether to prettify the output (true) or use compact format (false)
+ * @param iconSettings - Settings for icon export (mode and package name)
  * @returns Object with css, tailwind, and raw outputs, plus componentName and variableMappings
  */
-PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationFormat: AnnotationFormat = "html", prettify: boolean = true) => {
+PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationFormat: AnnotationFormat = "html", prettify: boolean = true, iconSettings: IconExportSettings = { mode: 'none' }) => {
   const selectedNodes = figma.currentPage.selection;
   
   if (selectedNodes.length === 0) {
@@ -227,7 +229,12 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
 
     // Step 3: Traverse the selected components to build node tree structure
     // This creates a hierarchical representation of the component structure
-    const extractedNodes = traverseSelection(nodesToExtract);
+    let extractedNodes;
+    try {
+      extractedNodes = await traverseSelection(nodesToExtract);
+    } catch (traverseErr) {
+      throw traverseErr;
+    }
 
     /**
      * Recursively extracts styles for a node and its children.
@@ -301,24 +308,25 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
     // CSS: HTML with inline styles using CSS variables
     // Tailwind: HTML with Tailwind utility classes
     // Raw: JSON representation of the extracted node structure
+    // All generators receive iconSettings for icon handling
     let cssDom;
     let tailwindDom;
     let rawJson;
     
     try {
-      cssDom = generateDOM(extractedNodes, annotationFormat, prettify);
+      cssDom = generateDOM(extractedNodes, annotationFormat, prettify, iconSettings);
     } catch (domError) {
       throw new Error(`Failed to generate CSS DOM: ${domError instanceof Error ? domError.message : "Unknown error"}`);
     }
     
     try {
-      tailwindDom = generateTailwindDOM(extractedNodes, annotationFormat, prettify);
+      tailwindDom = generateTailwindDOM(extractedNodes, annotationFormat, prettify, iconSettings);
     } catch (domError) {
       throw new Error(`Failed to generate Tailwind DOM: ${domError instanceof Error ? domError.message : "Unknown error"}`);
     }
     
     try {
-      rawJson = generateRawJSON(extractedNodes, prettify);
+      rawJson = generateRawJSON(extractedNodes, prettify, iconSettings);
     } catch (jsonError) {
       throw new Error(`Failed to generate Raw JSON: ${jsonError instanceof Error ? jsonError.message : "Unknown error"}`);
     }
@@ -359,8 +367,9 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
     // Use the original selection (which may be a COMPONENT_SET) for property extraction
     let componentProperties = null;
     for (const node of selectedNodes) {
-      const props = extractComponentProperties(node);
-      if (props) {
+      try {
+        const props = extractComponentProperties(node);
+        if (props) {
         componentProperties = {
           definitions: props.definitions.map(d => ({
             name: d.name,
@@ -377,8 +386,15 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
           documentationLinks: props.documentationLinks,
         };
         break; // Use the first node with component properties
+        }
+      } catch (propsErr) {
+        throw propsErr;
       }
     }
+
+    // Build class-to-DOM mapping using the same generation logic as Tailwind output
+    // This ensures consistency between the HTML output and the class selection modal
+    const classToDOMMap = buildClassToDOMMap(extractedNodes, {});
 
     const result = {
       // CSS format output
@@ -404,6 +420,7 @@ PLUGIN_CHANNEL.registerMessageHandler("extractComponent", async (annotationForma
       variableMappings: variableMappings.length > 0 ? variableMappings : undefined,
       usedVariables: allUsedVariables.length > 0 ? allUsedVariables : undefined,
       componentProperties: componentProperties || undefined,
+      classToDOMMap: Object.keys(classToDOMMap).length > 0 ? classToDOMMap : undefined,
     };
     
     return result;

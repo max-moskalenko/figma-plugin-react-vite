@@ -1,5 +1,6 @@
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
+import { IconExportSettings } from "@common/networkSides";
 
 export interface GeneratedRawJSON {
   json: string;
@@ -8,18 +9,46 @@ export interface GeneratedRawJSON {
 }
 
 /**
+ * Cleans icon metadata by removing svgContent (to keep JSON output smaller).
+ * Only includes isIcon and iconName in the output.
+ */
+function cleanIconMetadata(node: any): any {
+  if (!node) return node;
+  
+  const cleaned = { ...node };
+  
+  // Clean icon metadata - remove svgContent to keep output smaller
+  if (cleaned.icon) {
+    cleaned.icon = {
+      isIcon: cleaned.icon.isIcon,
+      iconName: cleaned.icon.iconName,
+    };
+  }
+  
+  // Recursively clean children
+  if (cleaned.children && Array.isArray(cleaned.children)) {
+    cleaned.children = cleaned.children.map(cleanIconMetadata);
+  }
+  
+  return cleaned;
+}
+
+/**
  * Generates a formatted JSON representation of extracted Figma nodes.
  * 
  * This output shows the raw data structure from the Figma API before any
  * CSS or Tailwind conversion, useful for debugging and tracing conversion logic.
+ * Icon metadata (isIcon, iconName) is included for detected icons.
  * 
  * @param nodes - Array of extracted nodes with styles
  * @param prettify - Whether to format with indentation (true) or keep compact (false)
+ * @param iconSettings - Settings for icon export (used for consistency, metadata is always included)
  * @returns GeneratedRawJSON object with formatted JSON output
  */
 export function generateRawJSON(
   nodes: (ExtractedNode & { styles?: ExtractedStyles; characters?: string })[],
-  prettify: boolean = true
+  prettify: boolean = true,
+  iconSettings: IconExportSettings = { mode: 'none' }
 ): GeneratedRawJSON {
   // Collect all variable names used across all nodes
   const usedVariables: Set<string> = new Set();
@@ -82,10 +111,13 @@ export function generateRawJSON(
   // Collect all variables
   nodes.forEach(collectVariables);
 
+  // Clean icon metadata (remove svgContent to keep JSON smaller)
+  const cleanedNodes = nodes.map(cleanIconMetadata);
+
   // Format the JSON - prettified with 2-space indentation or compact
   const json = prettify 
-    ? JSON.stringify(nodes, null, 2)
-    : JSON.stringify(nodes);
+    ? JSON.stringify(cleanedNodes, null, 2)
+    : JSON.stringify(cleanedNodes);
 
   // Convert variable names to CSS variable format for consistency with other generators
   const usedVariablesArray = Array.from(usedVariables)

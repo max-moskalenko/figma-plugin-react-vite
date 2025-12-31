@@ -1,7 +1,7 @@
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
-import { AnnotationFormat } from "@common/networkSides";
+import { AnnotationFormat, IconExportSettings } from "@common/networkSides";
 import {
   layoutToTailwind,
   typographyToTailwind,
@@ -70,11 +70,20 @@ function nodeTypeToHTMLElement(nodeType: string, isText: boolean = false): strin
  * Converts a node name to a Tailwind-friendly class name.
  * Examples: "Slider.Root" → "slider-root", "Label.Root" → "label-root"
  * 
+ * Filters out utilitarian properties like "isIcon" that shouldn't appear as classes.
+ * 
  * @param nodeName - The node name (e.g., "Slider.Root", "Label.Root")
  * @returns Tailwind-friendly class name (e.g., "slider-root", "label-root")
  */
 function nodeNameToTailwindClass(nodeName: string): string {
-  return nodeName
+  // Remove isIcon property from the name (e.g., "isIcon=True, Size=md" → "Size=md")
+  const cleanedName = nodeName
+    .replace(/,?\s*isIcon\s*=\s*(true|false)\s*,?/gi, ',')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+  
+  return cleanedName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
@@ -112,13 +121,16 @@ function generateAttributes(
 
 /**
  * Recursively generates HTML from an extracted node tree with Tailwind classes.
+ * Handles icon nodes based on iconSettings (npm-package mode transforms to component imports).
  */
 function generateHTMLRecursive(
   node: ExtractedNode & { styles?: ExtractedStyles },
   variableMap: VariableMap,
   annotationFormat: AnnotationFormat,
   prettify: boolean,
-  indent: number = 0
+  indent: number = 0,
+  iconSettings: IconExportSettings = { mode: 'none' },
+  imports: Set<string> = new Set()
 ): string {
   try {
     const indentStr = prettify ? "  ".repeat(indent) : "";
@@ -188,6 +200,15 @@ function generateHTMLRecursive(
       });
     }
 
+    // Handle icon nodes - NPM package mode transforms icons to component imports
+    // Don't include node name as a class since the component name already identifies it
+    if (node.icon?.isIcon && iconSettings.mode === 'npm-package') {
+      const packageName = iconSettings.packageName || '@phosphor-icons/react';
+      imports.add(`import { ${node.icon.iconName} } from '${packageName}';`);
+      const classes = tailwindClasses.filter(c => c).join(' ');
+      return indentStr + generateTailwindIconComponent(node.icon.iconName, classes);
+    }
+
     const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
     const attributes = generateAttributes(node.name, node.type, tailwindClasses, indent, prettify);
 
@@ -221,7 +242,9 @@ function generateHTMLRecursive(
               variableMap,
               annotationFormat,
               prettify,
-              indent + 1
+              indent + 1,
+              iconSettings,
+              imports
             );
             if (prettify && node.children && i < node.children.length - 1) {
               html += newline;
@@ -269,6 +292,18 @@ function escapeHTML(text: string): string {
     "'": "&#039;",
   };
   return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
+/**
+ * Generates icon component code for npm-package mode with Tailwind classes.
+ * 
+ * @param iconName - Name of the icon component
+ * @param className - Tailwind class string
+ * @returns HTML string for the icon component
+ */
+function generateTailwindIconComponent(iconName: string, className: string): string {
+  const classAttr = className ? ` className="${className}"` : '';
+  return `<${iconName}${classAttr} />`;
 }
 
 /**
@@ -326,13 +361,16 @@ function generateTailwindConfig(variableMap: VariableMap): string {
 
 /**
  * Generates complete DOM structure from extracted nodes with Tailwind classes.
+ * Handles icon nodes based on iconSettings.
  */
 export function generateTailwindDOM(
   nodes: (ExtractedNode & { styles?: ExtractedStyles })[],
   annotationFormat: AnnotationFormat = "html",
-  prettify: boolean = true
+  prettify: boolean = true,
+  iconSettings: IconExportSettings = { mode: 'none' }
 ): GeneratedTailwindDOM {
   const variableMap: VariableMap = {};
+  const imports: Set<string> = new Set();
 
   // First pass: collect all variables by generating Tailwind classes
   nodes.forEach((node) => {
@@ -348,7 +386,7 @@ export function generateTailwindDOM(
   // Generate HTML for all nodes with Tailwind classes
   const htmlParts = nodes.map((node, index) => {
     try {
-      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0);
+      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0, iconSettings, imports);
       return html;
     } catch (error) {
       console.error("Error generating HTML for node", { 
@@ -361,7 +399,13 @@ export function generateTailwindDOM(
     }
   });
 
-  const html = htmlParts.join(prettify ? "\n\n" : "");
+  let html = htmlParts.join(prettify ? "\n\n" : "");
+  
+  // Prepend imports if any (for npm-package mode)
+  if (imports.size > 0) {
+    const importsBlock = Array.from(imports).sort().join('\n');
+    html = `${importsBlock}\n\n${html}`;
+  }
   
   // Output only HTML, no config header
   const stylesheet = html;

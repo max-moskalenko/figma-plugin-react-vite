@@ -380,28 +380,51 @@ function extractClassesWithDOMElements(tailwindSheet: string, rawSheet: string):
   }
   
   // Step 2: Parse Tailwind HTML and map classes to elements
-  const classNameRegex = /<\w+\s+(?:className|class)="([^"]+)"/g;
+  // Updated regex to also capture the tag name (for icon components like <Acorn />)
+  const classNameRegex = /<(\w+)\s+(?:className|class)="([^"]+)"/g;
   let match;
   
   while ((match = classNameRegex.exec(tailwindSheet)) !== null) {
-    const classString = match[1];
+    const tagName = match[1]; // e.g., "div", "Acorn", "p"
+    const classString = match[2];
     const allClasses = classString.split(/\s+/).filter(c => c.trim());
     
     if (allClasses.length === 0) continue;
     
-    // First class is the element identifier (may be variant name or element name)
-    const firstClass = allClasses[0];
-    const styleClasses = allClasses.slice(1);
+    // Check if this is a React component (PascalCase tag = icon component)
+    const isReactComponent = /^[A-Z]/.test(tagName);
     
-    // Determine the actual element name from our map
-    let elementName = elementNameMap.get(firstClass) || firstClass;
+    let elementName: string;
+    let styleClasses: string[];
     
-    // If first class is a Figma variant name, use its normalized form as element
-    if (isFigmaVariantName(firstClass)) {
-      elementName = firstClass; // Use the variant wrapper name itself
-    } else if (elementNameMap.has(firstClass)) {
-      // Use the normalized name for matching (keep it lowercase kebab-case)
-      elementName = firstClass;
+    if (isReactComponent) {
+      // For icon components like <Acorn />, the tag name IS the element identifier
+      // All classes are style classes (we removed the element name class earlier)
+      elementName = tagName.toLowerCase(); // "Acorn" → "acorn"
+      styleClasses = allClasses;
+    } else {
+      // For regular HTML elements, first class is the element identifier
+      const firstClass = allClasses[0];
+      styleClasses = allClasses.slice(1);
+      
+      // Determine the actual element name from our map
+      elementName = elementNameMap.get(firstClass) || firstClass;
+      
+      // If first class is a Figma variant name, use its normalized form as element
+      if (isFigmaVariantName(firstClass)) {
+        elementName = firstClass; // Use the variant wrapper name itself
+      } else if (elementNameMap.has(firstClass)) {
+        // Use the normalized name for matching (keep it lowercase kebab-case)
+        elementName = firstClass;
+      }
+      
+      // Also add first class if it's a utility class (not an element identifier)
+      if (!isElementName(firstClass) && !isFigmaVariantName(firstClass)) {
+        if (!classMap.has(firstClass)) {
+          classMap.set(firstClass, new Set());
+        }
+        classMap.get(firstClass)!.add(elementName);
+      }
     }
     
     // Map style classes to this element
@@ -414,14 +437,6 @@ function extractClassesWithDOMElements(tailwindSheet: string, rawSheet: string):
         classMap.get(trimmed)!.add(elementName);
       }
     });
-    
-    // Also add first class if it's a utility class (not an element identifier)
-    if (!isElementName(firstClass) && !isFigmaVariantName(firstClass)) {
-      if (!classMap.has(firstClass)) {
-        classMap.set(firstClass, new Set());
-      }
-      classMap.get(firstClass)!.add(elementName);
-    }
   }
   
   // Convert to array
@@ -774,22 +789,36 @@ export function useCVAState(): CVAState & CVAActions {
         };
       }
 
-      // Extract classes from Tailwind output with DOM element associations
-      // Pass both Tailwind HTML and RAW JSON to get actual element names
-      const classesWithDOM = extractClassesWithDOMElements(
-        result.tailwind.stylesheet,
-        result.raw?.stylesheet || "[]"
-      );
+      // Use pre-built classToDOMMap from plugin (single source of truth)
+      // This is generated using the same logic as the Tailwind output
+      let extractedClasses: ExtractedClass[];
       
-      // Create ExtractedClass objects with categorization and DOM elements
-      const extractedClasses: ExtractedClass[] = classesWithDOM.map((item, index) => ({
-        id: `class-${index}-${item.className}`,
-        className: item.className,
-        category: categorizeClass(item.className),
-        domElements: item.domElements,
-        isSelected: true, // All selected as base by default
-        isUsedInVariant: false,
-      }));
+      if (result.classToDOMMap && Object.keys(result.classToDOMMap).length > 0) {
+        // New approach: Use the pre-built mapping from the plugin
+        extractedClasses = Object.entries(result.classToDOMMap).map(([className, domElements], index) => ({
+          id: `class-${index}-${className}`,
+          className,
+          category: categorizeClass(className),
+          domElements,
+          isSelected: true,
+          isUsedInVariant: false,
+        }));
+      } else {
+        // Fallback: Parse HTML (for backwards compatibility)
+        const classesWithDOM = extractClassesWithDOMElements(
+          result.tailwind.stylesheet,
+          result.raw?.stylesheet || "[]"
+        );
+        
+        extractedClasses = classesWithDOM.map((item, index) => ({
+          id: `class-${index}-${item.className}`,
+          className: item.className,
+          category: categorizeClass(item.className),
+          domElements: item.domElements,
+          isSelected: true,
+          isUsedInVariant: false,
+        }));
+      }
 
       // Extract properties from raw code snippet
       const snippetProperties = extractPropertiesFromSnippet(result.raw?.stylesheet || "");

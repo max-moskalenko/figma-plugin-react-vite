@@ -1278,3 +1278,84 @@ export function generateTailwindClasses(
   };
 }
 
+/**
+ * Normalizes an element name to a consistent format for mapping.
+ * Converts to lowercase kebab-case, removing special characters.
+ * 
+ * @param name - The original element name from Figma
+ * @returns Normalized name (e.g., "Left List Item Slot" → "left-list-item-slot")
+ */
+function normalizeElementName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Builds a mapping of Tailwind classes to their DOM element names.
+ * 
+ * This function walks through the extracted node tree and generates Tailwind classes
+ * for each element using the same generation logic as the HTML output. The result
+ * is a map where each class points to the element(s) it belongs to.
+ * 
+ * This is the single source of truth for class-to-DOM mapping, ensuring consistency
+ * between the generated HTML and the class selection modal.
+ * 
+ * @param nodes - Array of extracted nodes with styles
+ * @param variableMap - Map to store CSS variable definitions
+ * @returns Object mapping className → array of element names
+ */
+export function buildClassToDOMMap(
+  nodes: Array<{ name: string; type: string; styles?: ExtractedStyles; children?: any[] }>,
+  variableMap: VariableMap
+): { [className: string]: string[] } {
+  const classMap: Map<string, Set<string>> = new Map();
+  
+  /**
+   * Recursively processes a node and its children to build the class map.
+   * 
+   * @param node - The node to process
+   * @param depth - Current depth in the tree (0 = root variant)
+   */
+  function processNode(node: any, depth: number = 0): void {
+    if (!node || !node.name) return;
+    
+    // Get element name - use original name for display, normalized for consistency
+    const elementName = normalizeElementName(node.name);
+    
+    // Generate Tailwind classes for this node if it has styles
+    if (node.styles) {
+      const tailwindResult = generateTailwindClasses('', node.styles, variableMap);
+      
+      // Map each class to this element
+      tailwindResult.classes.forEach(cls => {
+        if (cls && cls.trim()) {
+          if (!classMap.has(cls)) {
+            classMap.set(cls, new Set());
+          }
+          classMap.get(cls)!.add(elementName);
+        }
+      });
+    }
+    
+    // Recursively process children
+    if (node.children && Array.isArray(node.children)) {
+      node.children.forEach((child: any) => {
+        processNode(child, depth + 1);
+      });
+    }
+  }
+  
+  // Process all root nodes
+  nodes.forEach(node => processNode(node, 0));
+  
+  // Convert Map<string, Set<string>> to { [className: string]: string[] }
+  const result: { [className: string]: string[] } = {};
+  classMap.forEach((elements, className) => {
+    result[className] = Array.from(elements).sort();
+  });
+  
+  return result;
+}
+

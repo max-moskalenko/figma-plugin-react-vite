@@ -261,9 +261,22 @@ export function ClassSelectionModal({
       const allClasses = classesStr.split(/\s+/).filter(c => c.trim());
       if (allClasses.length === 0) continue;
       
-      // First class is the element name, rest are styling classes
-      const elementName = allClasses[0];
-      const classes = allClasses.slice(1);
+      // Determine element name:
+      // - For React components (PascalCase tag like <Acorn>), use normalized tag name
+      // - For HTML elements (lowercase like <div>), use first class as element name
+      const isPascalCase = /^[A-Z]/.test(tagName);
+      let elementName: string;
+      let classes: string[];
+      
+      if (isPascalCase) {
+        // React component - tag name IS the element name, ALL classes are styling classes
+        elementName = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        classes = allClasses; // All classes are styling classes
+      } else {
+        // HTML element - first class is element name, rest are styling classes
+        elementName = allClasses[0];
+        classes = allClasses.slice(1);
+      }
       
       // Check if this element name matches a variant (from the kebab-case map)
       const matchedVariantName = variantNameMap.get(elementName);
@@ -337,34 +350,44 @@ export function ClassSelectionModal({
   }, [selectedVariant, variants, allChildElements]);
 
   // Get class counts per element (considering variant filter)
+  // Uses extractedClasses.domElements (from plugin's RAW-based classToDOMMap) as single source of truth
+  // This ensures icons and their children (like Vector) are always included
   const elementClassCounts = useMemo(() => {
     const counts = new Map<string, number>();
     
     if (selectedVariant) {
-      // Count classes for the selected variant
+      // Count classes for the selected variant using RAW-based hierarchy
       const variant = variants.find(v => v.variantName === selectedVariant);
       if (variant) {
-        // Count variant root classes (using kebab-case element name as key)
+        // Get all element names in this variant (from RAW hierarchy)
+        const variantElements = new Set<string>();
         if (variant.elementName) {
-          counts.set(variant.elementName, variant.variantClasses.length);
+          variantElements.add(variant.elementName);
         }
+        variant.childElementsHierarchy.forEach(elem => {
+          variantElements.add(elem.normalizedName);
+        });
         
-        // Count child element classes
-        variant.childElements.forEach((classes, elementName) => {
-          counts.set(elementName, classes.length);
+        // Count classes per element from extractedClasses.domElements (plugin's mapping)
+        extractedClasses.forEach(cls => {
+          cls.domElements.forEach(el => {
+            if (variantElements.has(el)) {
+              counts.set(el, (counts.get(el) || 0) + 1);
+            }
+          });
         });
       }
     } else {
-      // Count from classToDOMMap for all elements
-      classToDOMMap.forEach((elements, className) => {
-        elements.forEach(el => {
+      // Count from extractedClasses.domElements for all elements (plugin's mapping)
+      extractedClasses.forEach(cls => {
+        cls.domElements.forEach(el => {
           counts.set(el, (counts.get(el) || 0) + 1);
         });
       });
     }
     
     return counts;
-  }, [selectedVariant, variants, classToDOMMap]);
+  }, [selectedVariant, variants, extractedClasses]);
 
   // Helper: Get parent hierarchy path for an element at a given index
   const getParentPath = (index: number): string => {
@@ -421,6 +444,7 @@ export function ClassSelectionModal({
   }, [selectedDOMElement, selectedDOMElementIndex, multiSelectSameElements, currentChildElements]);
 
   // Filter classes based on variant and DOM element selection
+  // Uses extractedClasses.domElements (from plugin's RAW-based mapping) as single source of truth
   const filteredClasses = useMemo(() => {
     let classes = extractedClasses;
     
@@ -428,57 +452,40 @@ export function ClassSelectionModal({
     if (selectedVariant) {
       const variant = variants.find(v => v.variantName === selectedVariant);
       if (variant) {
-        // Get all classes for this variant
-        const variantClassSet = new Set<string>(variant.variantClasses);
-        variant.childElements.forEach(elementClasses => {
-          elementClasses.forEach(cls => variantClassSet.add(cls));
+        // Get all element names in this variant (from RAW hierarchy)
+        const variantElements = new Set<string>();
+        if (variant.elementName) {
+          variantElements.add(variant.elementName);
+        }
+        variant.childElementsHierarchy.forEach(elem => {
+          variantElements.add(elem.normalizedName);
         });
         
-        classes = classes.filter(c => variantClassSet.has(c.className));
-      }
-    }
-    
-    // Then filter by DOM element within that variant
-    if (selectedDOMElementsForFiltering) {
-      if (selectedVariant) {
-        // Filter to specific element(s) within variant
-        const variant = variants.find(v => v.variantName === selectedVariant);
-        if (variant) {
-          const classSet = new Set<string>();
-          
-          selectedDOMElementsForFiltering.forEach(elemName => {
-            if (elemName === variant.elementName) {
-              // Include variant root classes
-              variant.variantClasses.forEach(cls => classSet.add(cls));
-            } else {
-              // Include child element classes
-              const elementClasses = variant.childElements.get(elemName);
-              if (elementClasses) {
-                elementClasses.forEach(cls => classSet.add(cls));
-              }
-            }
-          });
-          
-          classes = classes.filter(c => classSet.has(c.className));
-        }
-      } else {
-        // No variant selected - filter by DOM element(s) across all
+        // Filter classes to those that belong to elements in this variant (using domElements from plugin)
         classes = classes.filter(c => {
-          const mappedElements = classToDOMMap.get(c.className);
-          if (!mappedElements) return false;
-          
-          // Check if the class is used by any of the selected elements
-          for (const elemName of selectedDOMElementsForFiltering) {
-            if (mappedElements.has(elemName)) return true;
+          for (const el of c.domElements) {
+            if (variantElements.has(el)) return true;
           }
           return false;
         });
       }
     }
     
+    // Then filter by DOM element within that variant
+    if (selectedDOMElementsForFiltering) {
+      // Filter to specific element(s) - works for both variant-selected and all-variants
+      classes = classes.filter(c => {
+        // Check if the class is used by any of the selected elements (using domElements from plugin)
+        for (const elemName of selectedDOMElementsForFiltering) {
+          if (c.domElements.includes(elemName)) return true;
+        }
+        return false;
+      });
+    }
+    
     // Filter by search term
     return filterClasses(classes, searchTerm);
-  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElementsForFiltering, variants, classToDOMMap]);
+  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElementsForFiltering, variants]);
 
   // Group classes by category
   const groupedClasses = useMemo(() => {

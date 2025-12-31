@@ -1,7 +1,7 @@
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, layoutToCSS, typographyToCSS, fillsToCSS, strokesToCSS, effectsToCSS, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
-import { AnnotationFormat } from "@common/networkSides";
+import { AnnotationFormat, IconExportSettings } from "@common/networkSides";
 
 export interface GeneratedDOM {
   html: string;
@@ -191,12 +191,15 @@ function generateAttributes(
  * 
  * Converts Figma nodes to HTML elements, applies inline styles, and preserves
  * the hierarchical structure. Handles text content, children, and self-closing tags.
+ * Handles icon nodes based on iconSettings (npm-package mode transforms to component imports).
  * 
  * @param node - The extracted node with optional styles
  * @param variableMap - Map of variable names to CSS values (populated during generation)
  * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
  * @param prettify - Whether to format with indentation or keep compact
  * @param indent - Current indentation level for formatting (default: 0)
+ * @param iconSettings - Settings for icon export
+ * @param imports - Set to collect icon imports (for npm-package mode)
  * @returns HTML string for this node and its children
  */
 function generateHTMLRecursive(
@@ -204,7 +207,9 @@ function generateHTMLRecursive(
   variableMap: VariableMap,
   annotationFormat: AnnotationFormat,
   prettify: boolean,
-  indent: number = 0
+  indent: number = 0,
+  iconSettings: IconExportSettings = { mode: 'none' },
+  imports: Set<string> = new Set()
 ): string {
   try {
     const indentStr = prettify ? "  ".repeat(indent) : "";
@@ -241,6 +246,13 @@ function generateHTMLRecursive(
       node.annotations.forEach((annotation) => {
         html += formatAnnotation(annotation, annotationFormat, indentStr);
       });
+    }
+
+    // Handle icon nodes - NPM package mode transforms icons to component imports
+    if (node.icon?.isIcon && iconSettings.mode === 'npm-package') {
+      const packageName = iconSettings.packageName || '@phosphor-icons/react';
+      imports.add(`import { ${node.icon.iconName} } from '${packageName}';`);
+      return indentStr + generateIconComponent(node.icon.iconName, inlineStyle);
     }
 
     const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
@@ -280,7 +292,9 @@ function generateHTMLRecursive(
               variableMap,
               annotationFormat,
               prettify,
-              indent + 1
+              indent + 1,
+              iconSettings,
+              imports
             );
             if (prettify && node.children && i < node.children.length - 1) {
               html += newline;
@@ -334,12 +348,25 @@ function escapeHTML(text: string): string {
 }
 
 /**
+ * Generates icon component code for npm-package mode.
+ * 
+ * @param iconName - Name of the icon component
+ * @param style - Inline style string
+ * @returns HTML string for the icon component
+ */
+function generateIconComponent(iconName: string, style: string): string {
+  const styleAttr = style ? ` style="${style}"` : '';
+  return `<${iconName}${styleAttr} />`;
+}
+
+/**
  * Generates complete DOM structure from extracted nodes with inline styles.
  * 
  * This is the main entry point for HTML generation. It:
  * 1. Collects all CSS variables by processing styles (populates variableMap)
  * 2. Generates HTML for each node with inline styles using CSS variables
- * 3. Returns HTML with formatted structure (no style block header)
+ * 3. Handles icon nodes based on iconSettings
+ * 4. Returns HTML with formatted structure (no style block header)
  * 
  * The output is HTML elements with inline styles. CSS variables are used in inline
  * styles (e.g., `var(--variable-name)`). Zero-value properties are filtered out.
@@ -347,14 +374,17 @@ function escapeHTML(text: string): string {
  * @param nodes - Array of extracted nodes with styles
  * @param annotationFormat - Format for annotations: "html", "tsx", or "none"
  * @param prettify - Whether to format with indentation (true) or keep compact (false)
+ * @param iconSettings - Settings for icon export
  * @returns GeneratedDOM object with html, css (variables block), and stylesheet (combined output)
  */
 export function generateDOM(
   nodes: (ExtractedNode & { styles?: ExtractedStyles })[],
   annotationFormat: AnnotationFormat = "html",
-  prettify: boolean = true
+  prettify: boolean = true,
+  iconSettings: IconExportSettings = { mode: 'none' }
 ): GeneratedDOM {
   const variableMap: VariableMap = {};
+  const imports: Set<string> = new Set();
 
   // First pass: collect all CSS variables by generating styles
   // This populates variableMap which is used for CSS variable references in inline styles
@@ -371,7 +401,7 @@ export function generateDOM(
   // Generate HTML for all nodes with inline styles
   const htmlParts = nodes.map((node, index) => {
     try {
-      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0);
+      const html = generateHTMLRecursive(node, variableMap, annotationFormat, prettify, 0, iconSettings, imports);
       return html;
     } catch (error) {
       console.error("Error generating HTML for node", { 
@@ -384,7 +414,13 @@ export function generateDOM(
     }
   });
 
-  const html = htmlParts.join(prettify ? "\n\n" : "");
+  let html = htmlParts.join(prettify ? "\n\n" : "");
+  
+  // Prepend imports if any (for npm-package mode)
+  if (imports.size > 0) {
+    const importsBlock = Array.from(imports).sort().join('\n');
+    html = `${importsBlock}\n\n${html}`;
+  }
   
   // Final output: HTML with inline styles only (no style block)
   const stylesheet = html;
