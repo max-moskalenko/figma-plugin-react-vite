@@ -503,19 +503,126 @@ function extractStrokes(node: SceneNode, variables: readonly VariableCollection[
 }
 
 /**
- * Extracts visual effects (shadows, blurs) from a node.
+ * Resolves a variable binding for an effect property.
+ * 
+ * @param binding - The variable binding object (VariableAlias)
+ * @param variables - All variable collections for resolving variable values
+ * @returns VariableInfo with the variable name and resolved value, or null if not resolvable
+ */
+function resolveEffectVariable(
+  binding: any,
+  variables: readonly VariableCollection[]
+): VariableInfo | null {
+  if (!binding || !("id" in binding)) {
+    return null;
+  }
+  
+  const variableId = binding.id;
+  if (typeof variableId !== "string") {
+    return null;
+  }
+  
+  try {
+    const variable = figma.variables.getVariableById(variableId);
+    if (!variable) {
+      return null;
+    }
+    
+    // Get the value for the current mode (default to first mode)
+    let modeId = "";
+    for (const collection of variables) {
+      if (collection.variableIds.includes(variableId)) {
+        modeId = collection.modes[0]?.modeId || "";
+        break;
+      }
+    }
+    
+    // FALLBACK: If modeId not found in collections, use first available mode from variable
+    if (!modeId && variable.valuesByMode) {
+      const availableModes = Object.keys(variable.valuesByMode);
+      if (availableModes.length > 0) {
+        modeId = availableModes[0];
+      }
+    }
+    
+    let value = variable.valuesByMode[modeId];
+    
+    // RECURSIVE RESOLUTION: If value is a VariableAlias, resolve it recursively
+    while (value && typeof value === "object" && "type" in value && value.type === "VARIABLE_ALIAS") {
+      const aliasId = (value as any).id;
+      const aliasVariable = figma.variables.getVariableById(aliasId);
+      if (!aliasVariable) break;
+      
+      let aliasModeId = "";
+      for (const collection of variables) {
+        if (collection.variableIds.includes(aliasId)) {
+          aliasModeId = collection.modes[0]?.modeId || "";
+          break;
+        }
+      }
+      
+      if (!aliasModeId && aliasVariable.valuesByMode) {
+        const availableModes = Object.keys(aliasVariable.valuesByMode);
+        if (availableModes.length > 0) {
+          aliasModeId = availableModes[0];
+        }
+      }
+      
+      value = aliasVariable.valuesByMode[aliasModeId];
+    }
+    
+    return {
+      name: variable.name,
+      value: value,
+      isVariable: true,
+    };
+  } catch (e) {
+    console.warn(`Could not resolve effect variable ${variableId}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Extracts visual effects (shadows, blurs) from a node, including variable resolution.
+ * 
+ * VARIABLE SUPPORT:
+ * Effects in Figma can have variables bound to individual properties:
+ * - color: Shadow/blur color variable
+ * - radius: Blur radius variable
+ * - spread: Shadow spread variable
+ * - offsetX/offsetY: Shadow offset variables
+ * 
+ * Variables are checked at:
+ * 1. node.boundVariables.effects[index] - array of effect-level bindings
+ * 2. effect.boundVariables - individual effect property bindings
  * 
  * @param node - The Figma node to extract effects from
- * @returns Array of extracted effects, or null if no effects
+ * @param variables - All variable collections for resolving variable values
+ * @returns Array of extracted effects with variable info, or null if no effects
  */
-function extractEffects(node: SceneNode): any {
+function extractEffects(node: SceneNode, variables: readonly VariableCollection[]): any {
   if (!("effects" in node) || !node.effects || node.effects.length === 0) {
     return null;
   }
 
-  return node.effects.map((effect: Effect) => {
+  const boundVars = node.boundVariables as any;
+  const effectStyleId = (node as any).effectStyleId;
+  
+  // Check if this node uses an Effect Style (complete shadow/blur style)
+  let effectStyleName: string | null = null;
+  if (effectStyleId) {
+    try {
+      const style = figma.getStyleById(effectStyleId);
+      if (style && style.type === "EFFECT") {
+        effectStyleName = style.name;
+      }
+    } catch (e) {
+      console.warn(`Could not resolve effect style ${effectStyleId}:`, e);
+    }
+  }
+  return node.effects.map((effect: Effect, effectIndex: number) => {
     if (effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW") {
-      return {
+      const extracted: any = {
         type: effect.type,
         color: rgbToHex(effect.color.r, effect.color.g, effect.color.b),
         opacity: effect.color.a !== undefined ? effect.color.a : 1,
@@ -526,11 +633,85 @@ function extractEffects(node: SceneNode): any {
         radius: effect.radius,
         spread: effect.spread,
       };
+      
+      // If the node uses an Effect Style, use the style name as the variable
+      // This is how Figma handles shadow/effect tokens - as complete styles, not individual properties
+      if (effectStyleName) {
+        extracted.variable = effectStyleName;
+      }
+      
+      // Fallback: Check for individual property variable bindings (less common)
+      const effectBinding = boundVars?.effects?.[effectIndex];
+      
+      // Check for color variable
+      if (!effectStyleName) {
+        let colorBinding = effectBinding?.color || (effect as any).boundVariables?.color;
+        if (colorBinding) {
+          const colorVar = resolveEffectVariable(colorBinding, variables);
+          if (colorVar) {
+            extracted.colorVariable = colorVar.name;
+          }
+        }
+      }
+      
+      // Fallback: Check for other individual property bindings (less common)
+      if (!effectStyleName) {
+        let radiusBinding = effectBinding?.radius || (effect as any).boundVariables?.radius;
+        if (radiusBinding) {
+          const radiusVar = resolveEffectVariable(radiusBinding, variables);
+          if (radiusVar) {
+            extracted.radiusVariable = radiusVar.name;
+          }
+        }
+        
+        let spreadBinding = effectBinding?.spread || (effect as any).boundVariables?.spread;
+        if (spreadBinding) {
+          const spreadVar = resolveEffectVariable(spreadBinding, variables);
+          if (spreadVar) {
+            extracted.spreadVariable = spreadVar.name;
+          }
+        }
+        
+        let offsetXBinding = effectBinding?.offsetX || (effect as any).boundVariables?.offsetX;
+        if (offsetXBinding) {
+          const offsetXVar = resolveEffectVariable(offsetXBinding, variables);
+          if (offsetXVar) {
+            extracted.offsetXVariable = offsetXVar.name;
+          }
+        }
+        
+        let offsetYBinding = effectBinding?.offsetY || (effect as any).boundVariables?.offsetY;
+        if (offsetYBinding) {
+          const offsetYVar = resolveEffectVariable(offsetYBinding, variables);
+          if (offsetYVar) {
+            extracted.offsetYVariable = offsetYVar.name;
+          }
+        }
+      }
+      
+      return extracted;
     } else if (effect.type === "LAYER_BLUR" || effect.type === "BACKGROUND_BLUR") {
-      return {
+      const extracted: any = {
         type: effect.type,
         radius: effect.radius,
       };
+      
+      // If the node uses an Effect Style, use the style name as the variable
+      if (effectStyleName) {
+        extracted.variable = effectStyleName;
+      } else {
+        // Fallback: Check for radius variable on blur effects
+        const effectBinding = boundVars?.effects?.[effectIndex];
+        let radiusBinding = effectBinding?.radius || (effect as any).boundVariables?.radius;
+        if (radiusBinding) {
+          const radiusVar = resolveEffectVariable(radiusBinding, variables);
+          if (radiusVar) {
+            extracted.radiusVariable = radiusVar.name;
+          }
+        }
+      }
+      
+      return extracted;
     }
     return effect;
   });
@@ -1022,7 +1203,7 @@ export function extractStyles(
   return {
     fills: extractFills(node, variables),
     strokes: extractStrokes(node, variables),
-    effects: extractEffects(node),
+    effects: extractEffects(node, variables),
     typography: extractTypography(node, variables),
     layout: extractLayout(node, variables),
     positioning: extractPositioning(node),

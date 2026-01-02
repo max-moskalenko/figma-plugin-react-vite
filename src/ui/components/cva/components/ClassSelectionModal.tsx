@@ -86,13 +86,12 @@ export function ClassSelectionModal({
         // Preserve original name for display
         const originalName = node.name;
         
-        // Normalize name to match Tailwind format: lowercase kebab-case
-        // Replace ALL non-alphanumeric characters (including arrows, dots, slashes, spaces) with hyphens
-        // Then clean up multiple consecutive hyphens and leading/trailing hyphens
+        // Normalize name to match Tailwind format: remove special chars (same as sanitizeTagName)
+        // Remove characters invalid in tag names (keep letters, numbers, hyphens, underscores)
+        // Then lowercase for consistent matching
         const normalizedName = originalName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')  // Replace any non-alphanumeric chars with single hyphen
-          .replace(/^-+|-+$/g, '');      // Remove leading/trailing hyphens
+          .replace(/[^a-zA-Z0-9_.-]/g, '')  // Remove special chars (matches Tailwind sanitization, preserves dots)
+          .toLowerCase();                    // Lowercase for matching
         childElementsSet.add(normalizedName);
         
         // Use depth directly - variant root is added separately with depth 0
@@ -124,59 +123,92 @@ export function ClassSelectionModal({
     if (extractorResult.componentProperties && extractorResult.componentProperties.variants.length > 0) {
       // Use componentProperties.variants to get ALL variants (even if user selected just one)
       extractorResult.componentProperties.variants.forEach(variant => {
-        const kebabName = variant.variantName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        // Match sanitizeTagName normalization: remove special chars, then lowercase
+        const elementName = variant.variantName.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
         variantStructures.push({
           variantName: variant.variantName,
-          elementName: kebabName,
+          elementName,
           variantClasses: [],
           childElements: new Map(),
           childElementsHierarchy: []
         });
-        // Map: "type-checkbox-state-unchecked" -> "Type=Checkbox, State=Unchecked"
-        variantNameMap.set(kebabName, variant.variantName);
+        // Map: "typecheckboxstateunchecked" -> "Type=Checkbox, State=Unchecked"
+        variantNameMap.set(elementName, variant.variantName);
       });
       
       // Get component set name if available
-      if (rawNodes.length > 0 && rawNodes[0].type === "COMPONENT_SET") {
-        compSetName = rawNodes[0].name;
+      if (rawNodes.length > 0) {
+        if (rawNodes[0].type === "COMPONENT_SET") {
+          compSetName = rawNodes[0].name;
+        } else if (rawNodes[0].componentSetName) {
+          // Extract from individual component's componentSetName field
+          compSetName = rawNodes[0].componentSetName;
+        }
       }
     } else if (rawNodes.length > 0) {
       // Fallback: parse from raw nodes if componentProperties not available
       const firstNode = rawNodes[0];
       
-      // Case 1: COMPONENT_SET with multiple variants
+      // Extract componentSetName if available
       if (firstNode.type === "COMPONENT_SET") {
         compSetName = firstNode.name;
-        
+      } else if (firstNode.componentSetName) {
+        compSetName = firstNode.componentSetName;
+      }
+      
+      // Case 1: COMPONENT_SET with multiple variants
+      if (firstNode.type === "COMPONENT_SET") {
         // Each child of COMPONENT_SET is a variant
         if (firstNode.children && Array.isArray(firstNode.children)) {
           firstNode.children.forEach((variantNode: any) => {
             if (variantNode.type === "COMPONENT") {
-              const kebabName = variantNode.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+              // Match sanitizeTagName normalization: remove special chars, then lowercase
+              const elementName = variantNode.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
               variantStructures.push({
                 variantName: variantNode.name,
-                elementName: kebabName,
+                elementName,
                 variantClasses: [],
                 childElements: new Map(),
                 childElementsHierarchy: []
               });
-              variantNameMap.set(kebabName, variantNode.name);
+              variantNameMap.set(elementName, variantNode.name);
             }
           });
         }
       }
-      // Case 2: Single COMPONENT or other node
-      else {
-        const kebabName = firstNode.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      // Case 2: Multiple COMPONENT nodes with same componentSetName (variants from a component set)
+      else if (firstNode.componentSetName && rawNodes.every((n: any) => n.componentSetName === firstNode.componentSetName)) {
+        // Multiple variants from the same component set
+        rawNodes.forEach((node: any) => {
+          if (node.type === "COMPONENT") {
+            // Match sanitizeTagName normalization: remove special chars, then lowercase
+            const elementName = node.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+            variantStructures.push({
+              variantName: node.name,
+              elementName,
+              variantClasses: [],
+              childElements: new Map(),
+              childElementsHierarchy: []
+            });
+            variantNameMap.set(elementName, node.name);
+          }
+        });
+      }
+      // Case 3: Single COMPONENT with componentSetName (single variant selected from a set)
+      // Do NOT create variants for instances or standalone components without componentSetName
+      else if (firstNode.type === "COMPONENT" && firstNode.componentSetName) {
+        // Match sanitizeTagName normalization: remove special chars, then lowercase
+        const elementName = firstNode.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
         variantStructures.push({
           variantName: firstNode.name,
-          elementName: kebabName,
+          elementName,
           variantClasses: [],
           childElements: new Map(),
           childElementsHierarchy: []
         });
-        variantNameMap.set(kebabName, firstNode.name);
+        variantNameMap.set(elementName, firstNode.name);
       }
+      // else: Instances, standalone components, etc. - no variant structures, use global classToDOMMap
     }
     
     // Collect DOM hierarchy per variant from RAW JSON (single source of truth)
@@ -210,10 +242,11 @@ export function ClassSelectionModal({
             }
           });
         }
-      } else if (node.type === "COMPONENT" || node.type === "INSTANCE") {
-        // For single components, collect directly
+      } else if (node.type === "COMPONENT" || node.type === "INSTANCE" || node.type === "FRAME") {
+        // For single components, instances, and frames
         const variant = variantStructures.find(v => v.variantName === node.name);
         if (variant && variant.elementName) {
+          // Case: Part of a variant structure (single variant from a component set)
           // Add variant root element itself first (depth 0)
           const variantRoot: DOMElement = {
             name: node.name, // Original name for display
@@ -231,6 +264,23 @@ export function ClassSelectionModal({
           
           // Combine: variant root + children (in correct order)
           variant.childElementsHierarchy = [variantRoot, ...domElements];
+        } else {
+          // Case: No variant structure (standalone master component, instance, or frame)
+          // Add root element first, then collect children
+          const rootElementName = node.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+          const rootElement: DOMElement = {
+            name: node.name, // Original name for display
+            normalizedName: rootElementName,
+            depth: 0
+          };
+          childElementsWithHierarchy.push(rootElement);
+          
+          // Collect child elements starting from depth 1
+          if (node.children && Array.isArray(node.children)) {
+            node.children.forEach((child: any) => {
+              childElementsWithHierarchy.push(...collectElementNames(child, false, 1));
+            });
+          }
         }
       }
     });
@@ -249,7 +299,10 @@ export function ClassSelectionModal({
     
     // Track which variant context we're in (for proper child element assignment)
     let currentVariantContext: VariantDOMStructure | null = null;
+    let variantIndex = 0; // Track which variant we're currently parsing
     
+    let parsedElementCount = 0;
+    let totalClassCount = 0;
     
     while ((match = elementRegex.exec(tailwindSheet)) !== null) {
       const tagName = match[1];
@@ -265,23 +318,48 @@ export function ClassSelectionModal({
       // Determine element name:
       // - For React components (PascalCase tag like <Acorn>), use normalized tag name
       // - For HTML elements (lowercase like <div>), use first class as element name
+      // - SPECIAL CASE: PascalCase tag matching componentSetName = variant root, look for variant in classes
       const isPascalCase = /^[A-Z]/.test(tagName);
       let elementName: string;
       let classes: string[];
+      let isVariantRoot = false;
       
       if (isPascalCase) {
         // React component - tag name IS the element name, ALL classes are styling classes
-        elementName = tagName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        classes = allClasses; // All classes are styling classes
+        const normalizedTag = tagName.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+        
+        // Check if this tag matches the componentSetName (indicates a variant root)
+        const componentSetNameNormalized = compSetName?.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+        if (componentSetNameNormalized && normalizedTag === componentSetNameNormalized) {
+          // This is a variant root - assign to next variant in sequence
+          if (variantIndex < variantStructures.length) {
+            const variant = variantStructures[variantIndex];
+            elementName = variant.elementName || normalizedTag; // Use the variant's kebab-case identifier
+            classes = allClasses; // All classes are styling classes
+            isVariantRoot = true;
+            variantIndex++; // Move to next variant for next occurrence
+          } else {
+            // Fallback if we somehow have more elements than variants
+            elementName = normalizedTag;
+            classes = allClasses;
+          }
+        } else {
+          // Regular React component
+          elementName = normalizedTag;
+          classes = allClasses;
+        }
       } else {
         // HTML element - first class is element name, rest are styling classes
         elementName = allClasses[0];
         classes = allClasses.slice(1);
       }
       
+      const classesBeforeFilter = classes.length;
       // Filter out zero-value classes (like rounded-[0px], p-[0px]) to match skip zeros filtering
       classes = classes.filter(cls => !/^[\w-]+\[0(px)?(_0(px)?)*\]$/.test(cls));
       
+      parsedElementCount++;
+      totalClassCount += classes.length;
       
       // Check if this element name matches a variant (from the kebab-case map)
       const matchedVariantName = variantNameMap.get(elementName);
@@ -314,10 +392,10 @@ export function ClassSelectionModal({
           classes.forEach(cls => {
             if (!existing.includes(cls)) existing.push(cls);
           });
+        } else {
         }
       }
     }
-    
     
     return { 
       variants: variantStructures, 
@@ -404,6 +482,16 @@ export function ClassSelectionModal({
             const elementClasses = elementVariant.childElements.get(elem.normalizedName);
             counts.set(`${index}:${elem.normalizedName}`, elementClasses?.length || 0);
           }
+        } else {
+          // No variant found (e.g., instances) - count from global classToDOMMap
+          // Count how many classes include this element name in their domElements array
+          let count = 0;
+          extractedClasses.forEach(c => {
+            if (c.domElements.includes(elem.normalizedName)) {
+              count++;
+            }
+          });
+          counts.set(`${index}:${elem.normalizedName}`, count);
         }
       });
     }
@@ -524,7 +612,6 @@ export function ClassSelectionModal({
           // Find which variant the clicked element belongs to
           const elementVariant = getVariantForElementIndex(selectedDOMElementIndex);
           
-          
           if (elementVariant) {
             // Get classes for this specific element from this specific variant
             const specificElementClasses = new Set<string>();
@@ -543,6 +630,14 @@ export function ClassSelectionModal({
             
             
             classes = classes.filter(c => specificElementClasses.has(c.className));
+          } else {
+            // No variant found (e.g., instances) - use global classToDOMMap like multi-select mode
+            classes = classes.filter(c => {
+              for (const elemName of selectedDOMElementsForFiltering) {
+                if (c.domElements.includes(elemName)) return true;
+              }
+              return false;
+            });
           }
         } else {
           // MULTI-SELECT mode - use global domElements from plugin (all classes with matching element names)
@@ -768,9 +863,11 @@ export function ClassSelectionModal({
             </button>
             
             {/* DOM elements - includes variant root + children, all from RAW JSON */}
-            {currentChildElements.map((elem, index) => {
+            {currentChildElements.length > 0 && currentChildElements.map((elem, index) => {
               // Check if element should be visible based on parent collapse state
-              if (!isElementVisible(elem, index)) return null;
+              if (!isElementVisible(elem, index)) {
+                return null;
+              }
               
               // Get count: in All Variants mode, use index-based key; in specific variant mode, use element name
               const countKey = !selectedVariant 

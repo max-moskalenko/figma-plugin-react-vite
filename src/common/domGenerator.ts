@@ -38,36 +38,45 @@ function formatAnnotation(annotation: string, format: AnnotationFormat, indent: 
 }
 
 /**
- * Maps a Figma node type to an appropriate HTML element.
+ * Sanitizes a Figma layer name for use as an HTML/JSX tag name.
+ * Preserves the original casing (for React component style), removes invalid characters.
  * 
- * @param nodeType - The Figma node type (e.g., "FRAME", "TEXT", "RECTANGLE")
- * @param isText - Whether this is a text node (currently unused, defaults to paragraph)
- * @returns HTML element name (e.g., "div", "p", "svg")
+ * For variant components, uses the parent COMPONENT_SET name instead of the variant
+ * property string (e.g., "Checkbox" instead of "type=checkbox, state=default, ...").
+ * 
+ * @param nodeName - The original Figma layer name
+ * @param componentSetName - Optional parent COMPONENT_SET name (for variants)
+ * @returns Sanitized tag name safe for HTML/JSX
  */
-function nodeTypeToHTMLElement(nodeType: string, isText: boolean = false): string {
-  if (isText) {
-    // Determine heading level or paragraph
-    return "p"; // Default to paragraph, can be enhanced
+function sanitizeTagName(nodeName: string, componentSetName?: string): string {
+  // For variant components, use the parent COMPONENT_SET name
+  const nameToUse = componentSetName || nodeName;
+  
+  if (!nameToUse || !nameToUse.trim()) {
+    return "div"; // Fallback for empty names
   }
-
-  switch (nodeType) {
-    case "FRAME":
-    case "GROUP":
-    case "COMPONENT":
-    case "INSTANCE":
-      return "div";
-    case "RECTANGLE":
-    case "ELLIPSE":
-    case "POLYGON":
-    case "STAR":
-      return "div";
-    case "VECTOR":
-      return "svg";
-    case "TEXT":
-      return "p";
-    default:
-      return "div";
+  
+  // Remove isIcon property from the name (e.g., "isIcon=True, Size=md" → "Size=md")
+  let cleanedName = nameToUse
+    .replace(/,?\s*isIcon\s*=\s*(true|false)\s*,?/gi, ',')
+    .replace(/^,\s*/, '')
+    .replace(/,\s*$/, '')
+    .trim();
+  
+  if (!cleanedName) {
+    return "div"; // Fallback if only isIcon property was present
   }
+  
+  // Remove characters invalid in tag names (keep letters, numbers, hyphens, underscores)
+  // Preserve original casing for React component style
+  cleanedName = cleanedName.replace(/[^a-zA-Z0-9_-]/g, '');
+  
+  // Tag names can't start with a number or hyphen
+  if (/^[0-9-]/.test(cleanedName)) {
+    cleanedName = 'Element' + cleanedName;
+  }
+  
+  return cleanedName || "div";
 }
 
 /**
@@ -133,18 +142,14 @@ function propertiesToInlineStyle(properties: string[]): string {
 }
 
 /**
- * Generates HTML attributes for a node, with data-name as the first attribute.
+ * Generates HTML attributes for a node (layer name is now the tag, not an attribute).
  * 
- * @param nodeName - The Figma node name (used for data-name attribute)
- * @param nodeType - The Figma node type (used for data-type attribute)
  * @param inlineStyle - The inline style string to include
  * @param indent - Indentation level for formatting
  * @param prettify - Whether to format with newlines or keep compact
  * @returns Formatted attributes string
  */
 function generateAttributes(
-  nodeName: string,
-  nodeType: string,
   inlineStyle: string,
   indent: number,
   prettify: boolean
@@ -152,17 +157,7 @@ function generateAttributes(
   const indentStr = "  ".repeat(indent);
   const attrs: string[] = [];
   
-  // Safely convert nodeName and nodeType to strings (handle symbols)
-  const safeNodeName = typeof nodeName === "symbol" ? "symbol-node" : String(nodeName);
-  const safeNodeType = typeof nodeType === "symbol" ? "unknown" : String(nodeType);
-  
-  // data-name first (as requested)
-  attrs.push(`data-name="${safeNodeName.replace(/"/g, "&quot;")}"`);
-  
-  // data-type second
-  attrs.push(`data-type="${safeNodeType.toLowerCase()}"`);
-  
-  // style last
+  // style attribute (layer name is now the tag)
   if (inlineStyle) {
     const escapedStyle = inlineStyle.replace(/"/g, "&quot;");
     if (prettify && escapedStyle.length > 60) {
@@ -179,10 +174,10 @@ function generateAttributes(
 
   if (prettify) {
     // Multi-line format for readability
-    return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+    return attrs.length > 0 ? `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}` : "";
   } else {
     // Compact single-line format
-    return ` ${attrs.join(" ")}`;
+    return attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
   }
 }
 
@@ -255,8 +250,8 @@ function generateHTMLRecursive(
       return indentStr + generateIconComponent(node.icon.iconName, inlineStyle);
     }
 
-    const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
-    const attributes = generateAttributes(node.name, node.type, inlineStyle, indent, prettify);
+    const element = sanitizeTagName(node.name, (node as any).componentSetName);
+    const attributes = generateAttributes(inlineStyle, indent, prettify);
 
     // Build opening tag
     const openingTag = prettify 
@@ -394,7 +389,7 @@ export function generateDOM(
       typographyToCSS(node.styles.typography, variableMap);
       fillsToCSS(node.styles.fills, variableMap);
       strokesToCSS(node.styles.strokes, variableMap);
-      effectsToCSS(node.styles.effects); // Note: effects don't store variables, but included for completeness
+      effectsToCSS(node.styles.effects);
     }
   });
 

@@ -105,6 +105,21 @@ export function generateRawJSON(
       }
     }
 
+    // Effect variables (shadows, blurs)
+    const effects = node.styles.effects;
+    if (effects && Array.isArray(effects)) {
+      effects.forEach((effect: any) => {
+        // Effect Style variable (primary method - complete shadow/blur style)
+        if (effect.variable) usedVariables.add(effect.variable);
+        // Individual property variables (fallback method)
+        if (effect.colorVariable) usedVariables.add(effect.colorVariable);
+        if (effect.radiusVariable) usedVariables.add(effect.radiusVariable);
+        if (effect.spreadVariable) usedVariables.add(effect.spreadVariable);
+        if (effect.offsetXVariable) usedVariables.add(effect.offsetXVariable);
+        if (effect.offsetYVariable) usedVariables.add(effect.offsetYVariable);
+      });
+    }
+
     // Recurse into children
     if (node.children) {
       node.children.forEach((child) => {

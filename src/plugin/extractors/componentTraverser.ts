@@ -17,6 +17,9 @@ export interface ExtractedNode {
   annotations?: string[];
   // Icon metadata for detected icons
   icon?: IconMetadata;
+  // Parent COMPONENT_SET name (for variant components)
+  // Used to generate proper tag names instead of variant property strings
+  componentSetName?: string;
 }
 
 /**
@@ -209,6 +212,16 @@ export async function traverseComponent(node: SceneNode): Promise<ExtractedNode>
     type: node.type,
     annotations: extractAnnotations(node),
   };
+
+  // For variant components (COMPONENT inside COMPONENT_SET), store the parent name
+  // This allows DOM generators to use the clean component set name as the tag
+  // instead of the variant property string like "type=checkbox, state=default, ..."
+  if (node.type === "COMPONENT") {
+    const component = node as ComponentNode;
+    if (component.parent?.type === "COMPONENT_SET") {
+      extracted.componentSetName = component.parent.name;
+    }
+  }
 
   // Detect if this node is an icon
   const iconMetadata = detectIcon(node);

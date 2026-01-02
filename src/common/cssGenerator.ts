@@ -333,8 +333,12 @@ export function strokesToCSS(strokes: any, variableMap: VariableMap): string[] {
 /**
  * Converts visual effects (shadows, blurs) to CSS box-shadow and filter properties.
  * 
- * @param effects - Array of extracted effect objects
- * @returns Array of CSS property strings (e.g., ["box-shadow: 0 2px 4px rgba(0,0,0,0.1)"])
+ * VARIABLE SUPPORT:
+ * Effects can have variable fields (colorVariable, radiusVariable, spreadVariable, etc.)
+ * When a shadow has variables, the CSS output uses var(--variable-name) syntax.
+ * 
+ * @param effects - Array of extracted effect objects with optional variable fields
+ * @returns Array of CSS property strings (e.g., ["box-shadow: var(--shadow-dropdown)"])
  */
 export function effectsToCSS(effects: any): string[] {
   if (!effects || effects.length === 0) return [];
@@ -342,9 +346,20 @@ export function effectsToCSS(effects: any): string[] {
   const properties: string[] = [];
   const shadows: string[] = [];
   const blurs: string[] = [];
+  
+  // Check if effects have a style variable (Effect Style)
+  const effectStyleVariable = effects.find((e: any) => e.variable)?.variable;
+  
+  // Collect any shadow-related individual property variables (fallback)
+  const shadowVariables: string[] = [];
 
   effects.forEach((effect: any) => {
     if (effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW") {
+      // Collect any individual property variables from this effect
+      if (effect.colorVariable) shadowVariables.push(effect.colorVariable);
+      if (effect.radiusVariable) shadowVariables.push(effect.radiusVariable);
+      if (effect.spreadVariable) shadowVariables.push(effect.spreadVariable);
+      
       const color = effect.color;
       const opacity = effect.opacity !== undefined ? effect.opacity : 1;
       const r = parseInt(color.slice(1, 3), 16);
@@ -354,12 +369,43 @@ export function effectsToCSS(effects: any): string[] {
       const shadow = `${inset}${effect.offset.x}px ${effect.offset.y}px ${effect.radius}px rgba(${r}, ${g}, ${b}, ${opacity})`;
       shadows.push(shadow);
     } else if (effect.type === "LAYER_BLUR" || effect.type === "BACKGROUND_BLUR") {
-      blurs.push(`blur(${effect.radius}px)`);
+      // Check for Effect Style variable first
+      if (effect.variable) {
+        const cssVarName = figmaVariableToCSSVariable(effect.variable);
+        blurs.push(`blur(var(${cssVarName}))`);
+      } else if (effect.radiusVariable) {
+        // Fallback to individual property variable
+        const cssVarName = figmaVariableToCSSVariable(effect.radiusVariable);
+        blurs.push(`blur(var(${cssVarName}))`);
+      } else {
+        blurs.push(`blur(${effect.radius}px)`);
+      }
     }
   });
 
   if (shadows.length > 0) {
-    properties.push(`box-shadow: ${shadows.join(", ")}`);
+    // Prefer Effect Style variable (e.g., "shadow/lg")
+    if (effectStyleVariable) {
+      const cssVarName = figmaVariableToCSSVariable(effectStyleVariable);
+      properties.push(`box-shadow: var(${cssVarName})`);
+    } else if (shadowVariables.length > 0) {
+      // Fallback: Use individual property variables
+      const shadowToken = shadowVariables.find(v => 
+        v.toLowerCase().includes('shadow') || 
+        v.toLowerCase().includes('elevation')
+      );
+      
+      if (shadowToken) {
+        const cssVarName = figmaVariableToCSSVariable(shadowToken);
+        properties.push(`box-shadow: var(${cssVarName})`);
+      } else {
+        const cssVarName = figmaVariableToCSSVariable(shadowVariables[0]);
+        properties.push(`box-shadow: var(${cssVarName})`);
+      }
+    } else {
+      // No variables - use raw shadow values
+      properties.push(`box-shadow: ${shadows.join(", ")}`);
+    }
   }
 
   if (blurs.length > 0) {

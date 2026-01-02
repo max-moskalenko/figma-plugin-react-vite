@@ -39,63 +39,53 @@ function formatAnnotation(annotation: string, format: AnnotationFormat, indent: 
 }
 
 /**
- * Maps a Figma node type to an appropriate HTML element.
- */
-function nodeTypeToHTMLElement(nodeType: string, isText: boolean = false): string {
-  if (isText) {
-    return "p";
-  }
-
-  switch (nodeType) {
-    case "FRAME":
-    case "GROUP":
-    case "COMPONENT":
-    case "INSTANCE":
-      return "div";
-    case "RECTANGLE":
-    case "ELLIPSE":
-    case "POLYGON":
-    case "STAR":
-      return "div";
-    case "VECTOR":
-      return "svg";
-    case "TEXT":
-      return "p";
-    default:
-      return "div";
-  }
-}
-
-/**
- * Converts a node name to a Tailwind-friendly class name.
- * Examples: "Slider.Root" → "slider-root", "Label.Root" → "label-root"
+ * Sanitizes a Figma layer name for use as an HTML/JSX tag name.
+ * Preserves the original casing (for React component style), removes invalid characters.
  * 
- * Filters out utilitarian properties like "isIcon" that shouldn't appear as classes.
+ * For variant components, uses the parent COMPONENT_SET name instead of the variant
+ * property string (e.g., "Checkbox" instead of "type=checkbox, state=default, ...").
  * 
- * @param nodeName - The node name (e.g., "Slider.Root", "Label.Root")
- * @returns Tailwind-friendly class name (e.g., "slider-root", "label-root")
+ * @param nodeName - The original Figma layer name
+ * @param componentSetName - Optional parent COMPONENT_SET name (for variants)
+ * @returns Sanitized tag name safe for HTML/JSX
  */
-function nodeNameToTailwindClass(nodeName: string): string {
+function sanitizeTagName(nodeName: string, componentSetName?: string): string {
+  // For variant components, use the parent COMPONENT_SET name
+  const nameToUse = componentSetName || nodeName;
+  
+  if (!nameToUse || !nameToUse.trim()) {
+    return "div"; // Fallback for empty names
+  }
+  
   // Remove isIcon property from the name (e.g., "isIcon=True, Size=md" → "Size=md")
-  const cleanedName = nodeName
+  let cleanedName = nameToUse
     .replace(/,?\s*isIcon\s*=\s*(true|false)\s*,?/gi, ',')
     .replace(/^,\s*/, '')
     .replace(/,\s*$/, '')
     .trim();
   
-  return cleanedName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  if (!cleanedName) {
+    return "div"; // Fallback if only isIcon property was present
+  }
+  
+  // Remove characters invalid in React/JSX tag names
+  // Keep letters, numbers, hyphens, underscores, and dots (for React component namespacing)
+  // Preserve original casing for React component style
+  cleanedName = cleanedName.replace(/[^a-zA-Z0-9_.-]/g, '');
+  
+  // Tag names can't start with a number or hyphen
+  if (/^[0-9-]/.test(cleanedName)) {
+    cleanedName = 'Element' + cleanedName;
+  }
+  
+  return cleanedName || "div";
 }
 
 /**
  * Generates HTML attributes for a node with Tailwind classes.
- * For Tailwind format: only className attribute with all classes including node name.
+ * For Tailwind format: only className attribute with utility classes (layer name is now the tag).
  */
 function generateAttributes(
-  nodeName: string,
-  nodeType: string,
   tailwindClasses: string[],
   indent: number,
   prettify: boolean
@@ -103,9 +93,8 @@ function generateAttributes(
   const indentStr = "  ".repeat(indent);
   const attrs: string[] = [];
   
-  // Convert node name to a class and add it to the classes array
-  const nodeNameClass = nodeNameToTailwindClass(nodeName);
-  const allClasses = [nodeNameClass, ...tailwindClasses].filter(c => c);
+  // Only include Tailwind utility classes - layer name is now the tag
+  const allClasses = tailwindClasses.filter(c => c);
   
   if (allClasses.length > 0) {
     const classValue = allClasses.join(" ");
@@ -113,7 +102,7 @@ function generateAttributes(
   }
 
   if (prettify) {
-    return `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}`;
+    return attrs.length > 0 ? `\n${indentStr}  ${attrs.join(`\n${indentStr}  `)}` : "";
   } else {
     return attrs.length > 0 ? ` ${attrs.join(" ")}` : "";
   }
@@ -209,8 +198,8 @@ function generateHTMLRecursive(
       return indentStr + generateTailwindIconComponent(node.icon.iconName, classes);
     }
 
-    const element = nodeTypeToHTMLElement(node.type, node.type === "TEXT");
-    const attributes = generateAttributes(node.name, node.type, tailwindClasses, indent, prettify);
+    const element = sanitizeTagName(node.name, (node as any).componentSetName);
+    const attributes = generateAttributes(tailwindClasses, indent, prettify);
 
     const openingTag = prettify
       ? `${indentStr}<${element}${attributes}${newline}${indentStr}`
@@ -379,7 +368,7 @@ export function generateTailwindDOM(
       typographyToTailwind(node.styles.typography, variableMap);
       fillsToTailwind(node.styles.fills, variableMap);
       strokesToTailwind(node.styles.strokes, variableMap);
-      effectsToTailwind(node.styles.effects); // Note: effects don't store variables, but included for completeness
+      effectsToTailwind(node.styles.effects);
     }
   });
 

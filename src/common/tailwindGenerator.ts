@@ -1280,14 +1280,16 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
  * REMAPPING LOGIC:
  * 
  * 1. Shadows (DROP_SHADOW, INNER_SHADOW):
- *    - Converts shadow properties to CSS shadow definition
+ *    - If color/radius/spread have variables, uses variable-based class: shadow-{varName}
+ *    - Otherwise converts shadow properties to CSS shadow definition
  *    - Format: {inset}{x}px {y}px {radius}px rgba(r,g,b,opacity)
  *    - Uses arbitrary value: shadow-[{shadowDefinition}]
  *    - Multiple shadows combined: shadow-[shadow1, shadow2, ...]
  *    - Inner shadows include "inset " prefix
  * 
  * 2. Blurs (LAYER_BLUR, BACKGROUND_BLUR):
- *    - Maps blur radius to Tailwind blur classes:
+ *    - If radius has variable, uses variable-based class: blur-{varName}
+ *    - Otherwise maps blur radius to Tailwind blur classes:
  *      - 4px → blur-sm
  *      - 8px → blur
  *      - 12px → blur-md
@@ -1295,13 +1297,16 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
  *      - 24px → blur-xl
  *      - Others → blur-[{radius}px]
  * 
- * NOTE: Effects don't support Figma variables, so all values are direct conversions.
+ * VARIABLE SUPPORT:
+ * Effects can now have variable fields (colorVariable, radiusVariable, spreadVariable, etc.)
+ * When all shadow effects share a common variable pattern, use that for the class name.
  * 
  * @param effects - Array of extracted effect objects with:
  *   - type: "DROP_SHADOW" | "INNER_SHADOW" | "LAYER_BLUR" | "BACKGROUND_BLUR"
  *   - For shadows: color (hex), opacity, offset (x, y), radius, spread
- *   - For blurs: radius
- * @returns Array of Tailwind class strings (e.g., ["shadow-[0_2px_4px_rgba(0,0,0,0.1)]", "blur-sm"])
+ *   - Optional variable fields: colorVariable, radiusVariable, spreadVariable, offsetXVariable, offsetYVariable
+ *   - For blurs: radius, optional radiusVariable
+ * @returns Array of Tailwind class strings (e.g., ["shadow-dropdown", "blur-sm"])
  */
 export function effectsToTailwind(effects: any): string[] {
   if (!effects || effects.length === 0) return [];
@@ -1309,9 +1314,20 @@ export function effectsToTailwind(effects: any): string[] {
   const classes: string[] = [];
   const shadows: string[] = [];
   const blurs: string[] = [];
+  
+  // Check if effects have a style variable (Effect Style)
+  const effectStyleVariable = effects.find((e: any) => e.variable)?.variable;
+  
+  // Collect any shadow-related individual property variables (fallback)
+  const shadowVariables: string[] = [];
 
   effects.forEach((effect: any) => {
     if (effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW") {
+      // Collect any individual property variables from this effect
+      if (effect.colorVariable) shadowVariables.push(effect.colorVariable);
+      if (effect.radiusVariable) shadowVariables.push(effect.radiusVariable);
+      if (effect.spreadVariable) shadowVariables.push(effect.spreadVariable);
+      
       const color = effect.color;
       const opacity = effect.opacity !== undefined ? effect.opacity : 1;
       const r = parseInt(color.slice(1, 3), 16);
@@ -1321,25 +1337,89 @@ export function effectsToTailwind(effects: any): string[] {
       const shadow = `${inset}${effect.offset.x}px ${effect.offset.y}px ${effect.radius}px rgba(${r},${g},${b},${opacity})`;
       shadows.push(shadow);
     } else if (effect.type === "LAYER_BLUR" || effect.type === "BACKGROUND_BLUR") {
-      blurs.push(`blur(${effect.radius}px)`);
+      // Check for Effect Style variable first
+      if (effect.variable) {
+        const varName = figmaVariableToTailwindClass(effect.variable);
+        // If the variable name already starts with "blur-", use it as-is
+        if (varName.startsWith('blur-')) {
+          blurs.push(varName);
+        } else {
+          blurs.push(`blur-${varName}`);
+        }
+      } else if (effect.radiusVariable) {
+        // Fallback to individual property variable
+        const varName = figmaVariableToTailwindClass(effect.radiusVariable);
+        if (varName.startsWith('blur-')) {
+          blurs.push(varName);
+        } else {
+          blurs.push(`blur-${varName}`);
+        }
+      } else {
+        blurs.push(`blur(${effect.radius}px)`);
+      }
     }
   });
 
   if (shadows.length > 0) {
-    // Use arbitrary values for custom shadows
-    classes.push(`shadow-[${shadows.join(", ")}]`);
+    // Prefer Effect Style variable (e.g., "shadow/lg")
+    if (effectStyleVariable) {
+      const varName = figmaVariableToTailwindClass(effectStyleVariable);
+      
+      // If the variable name already starts with "shadow-", use it as-is
+      // Otherwise, add the "shadow-" prefix
+      if (varName.startsWith('shadow-')) {
+        classes.push(varName);
+      } else {
+        classes.push(`shadow-${varName}`);
+      }
+    } else if (shadowVariables.length > 0) {
+      // Fallback: Use individual property variables
+      const shadowToken = shadowVariables.find(v => 
+        v.toLowerCase().includes('shadow') || 
+        v.toLowerCase().includes('elevation')
+      );
+      
+      if (shadowToken) {
+        const varName = figmaVariableToTailwindClass(shadowToken);
+        if (varName.startsWith('shadow-')) {
+          classes.push(varName);
+        } else {
+          classes.push(`shadow-${varName}`);
+        }
+      } else {
+        const varName = figmaVariableToTailwindClass(shadowVariables[0]);
+        classes.push(`shadow-${varName}`);
+      }
+    } else {
+      // No variables - use arbitrary values for custom shadows
+      classes.push(`shadow-[${shadows.join(", ")}]`);
+    }
   }
 
   if (blurs.length > 0) {
-    const blurRadius = effects.find((e: any) => e.radius)?.radius || 8;
-    const blurMap: { [key: number]: string } = {
-      4: "blur-sm",
-      8: "blur",
-      12: "blur-md",
-      16: "blur-lg",
-      24: "blur-xl",
-    };
-    classes.push(blurMap[blurRadius] || `blur-[${blurRadius}px]`);
+    // Check if we already added variable-based blur classes
+    const hasVariableBlur = effects.some((e: any) => 
+      (e.type === "LAYER_BLUR" || e.type === "BACKGROUND_BLUR") && (e.variable || e.radiusVariable)
+    );
+    
+    if (!hasVariableBlur) {
+      const blurRadius = effects.find((e: any) => e.radius)?.radius || 8;
+      const blurMap: { [key: number]: string } = {
+        4: "blur-sm",
+        8: "blur",
+        12: "blur-md",
+        16: "blur-lg",
+        24: "blur-xl",
+      };
+      classes.push(blurMap[blurRadius] || `blur-[${blurRadius}px]`);
+    } else {
+      // Variable-based blur classes were already added in the forEach
+      blurs.forEach(blur => {
+        if (blur.startsWith('blur-')) {
+          classes.push(blur);
+        }
+      });
+    }
   }
 
   return classes;
@@ -1408,10 +1488,10 @@ export function generateTailwindClasses(
  * @returns Normalized name (e.g., "Left List Item Slot" → "left-list-item-slot")
  */
 function normalizeElementName(name: string): string {
+  // Match the sanitizeTagName logic: remove special chars (keep letters, numbers, hyphens, underscores, dots)
   return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-zA-Z0-9_.-]/g, '')  // Remove special chars (matches sanitizeTagName, preserves dots for React)
+    .toLowerCase();                    // Lowercase for matching
 }
 
 /**
@@ -1448,17 +1528,21 @@ export function buildClassToDOMMap(
     
     // Generate Tailwind classes for this node if it has styles
     if (node.styles) {
-      const tailwindResult = generateTailwindClasses('', node.styles, variableMap);
-      
-      // Map each class to this element
-      tailwindResult.classes.forEach(cls => {
-        if (cls && cls.trim()) {
-          if (!classMap.has(cls)) {
-            classMap.set(cls, new Set());
+      try {
+        const tailwindResult = generateTailwindClasses('', node.styles, variableMap);
+        
+        // Map each class to this element
+        tailwindResult.classes.forEach(cls => {
+          if (cls && cls.trim()) {
+            if (!classMap.has(cls)) {
+              classMap.set(cls, new Set());
+            }
+            classMap.get(cls)!.add(elementName);
           }
-          classMap.get(cls)!.add(elementName);
-        }
-      });
+        });
+      } catch (error) {
+        // Silently skip nodes that fail to generate classes
+      }
     }
     
     // Recursively process children
@@ -1477,7 +1561,7 @@ export function buildClassToDOMMap(
   classMap.forEach((elements, className) => {
     result[className] = Array.from(elements).sort();
   });
-  
+    
   return result;
 }
 
