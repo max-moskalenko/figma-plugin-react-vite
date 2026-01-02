@@ -611,9 +611,56 @@ export function layoutToCSS(layout: any, variableMap: VariableMap): string[] {
     }
   }
 
+  // Min/Max width properties
+  if (layout.minWidth !== undefined && layout.minWidth !== null) {
+    if (layout.minWidthVariable) {
+      const cssVarName = figmaVariableToCSSVariable(layout.minWidthVariable);
+      variableMap[layout.minWidthVariable] = `${layout.minWidth}px`;
+      properties.push(`min-width: var(${cssVarName})`);
+    } else {
+      properties.push(`min-width: ${layout.minWidth}px`);
+    }
+  }
+
+  if (layout.maxWidth !== undefined && layout.maxWidth !== null) {
+    if (layout.maxWidthVariable) {
+      const cssVarName = figmaVariableToCSSVariable(layout.maxWidthVariable);
+      variableMap[layout.maxWidthVariable] = `${layout.maxWidth}px`;
+      properties.push(`max-width: var(${cssVarName})`);
+    } else {
+      properties.push(`max-width: ${layout.maxWidth}px`);
+    }
+  }
+
+  // Min/Max height properties
+  if (layout.minHeight !== undefined && layout.minHeight !== null) {
+    if (layout.minHeightVariable) {
+      const cssVarName = figmaVariableToCSSVariable(layout.minHeightVariable);
+      variableMap[layout.minHeightVariable] = `${layout.minHeight}px`;
+      properties.push(`min-height: var(${cssVarName})`);
+    } else {
+      properties.push(`min-height: ${layout.minHeight}px`);
+    }
+  }
+
+  if (layout.maxHeight !== undefined && layout.maxHeight !== null) {
+    if (layout.maxHeightVariable) {
+      const cssVarName = figmaVariableToCSSVariable(layout.maxHeightVariable);
+      variableMap[layout.maxHeightVariable] = `${layout.maxHeight}px`;
+      properties.push(`max-height: var(${cssVarName})`);
+    } else {
+      properties.push(`max-height: ${layout.maxHeight}px`);
+    }
+  }
+
   if (layout.layoutMode) {
     properties.push(`display: flex`);
     properties.push(`flex-direction: ${layout.layoutMode === "HORIZONTAL" ? "row" : "column"}`);
+
+    // Add flex-wrap if wrap is enabled
+    if (layout.layoutWrap === "WRAP") {
+      properties.push(`flex-wrap: wrap`);
+    }
 
     if (layout.paddingLeft !== undefined || layout.paddingRight !== undefined || layout.paddingTop !== undefined || layout.paddingBottom !== undefined) {
       // Check if any padding has variables
@@ -669,21 +716,69 @@ export function layoutToCSS(layout: any, variableMap: VariableMap): string[] {
       }
     }
 
-    // Always store itemSpacing variable if it exists (for consistency, even if not used with SPACE_BETWEEN)
+    // Always store spacing variables if they exist (for consistency)
     if (layout.itemSpacingVariable && layout.itemSpacing !== undefined) {
       variableMap[layout.itemSpacingVariable] = `${layout.itemSpacing}px`;
     }
+    if (layout.counterAxisSpacingVariable && layout.counterAxisSpacing !== undefined) {
+      variableMap[layout.counterAxisSpacingVariable] = `${layout.counterAxisSpacing}px`;
+    }
     
-    // Only add gap property if not using SPACE_BETWEEN (it handles spacing automatically)
-    if (layout.itemSpacing !== undefined && 
-        layout.primaryAxisAlignItems !== "SPACE_BETWEEN" && 
-        layout.counterAxisAlignItems !== "SPACE_BETWEEN") {
+    // GAP HANDLING:
+    // When wrapping is enabled, use separate row-gap and column-gap
+    // When not wrapping, use single gap property
+    const isHorizontal = layout.layoutMode === "HORIZONTAL";
+    const hasCounterAxisSpacing = layout.counterAxisSpacing !== undefined && layout.counterAxisSpacing !== null;
+    const isWrapping = layout.layoutWrap === "WRAP";
+    const skipGapForSpaceBetween = layout.primaryAxisAlignItems === "SPACE_BETWEEN" || layout.counterAxisAlignItems === "SPACE_BETWEEN";
+    
+    if (isWrapping && hasCounterAxisSpacing && layout.itemSpacing !== undefined && !skipGapForSpaceBetween) {
+      // Separate row-gap and column-gap for wrap mode
+      if (isHorizontal) {
+        // itemSpacing = column-gap, counterAxisSpacing = row-gap
+        if (layout.itemSpacingVariable) {
+          const cssVarName = figmaVariableToCSSVariable(layout.itemSpacingVariable);
+          properties.push(`column-gap: var(${cssVarName})`);
+        } else {
+          properties.push(`column-gap: ${layout.itemSpacing}px`);
+        }
+        if (layout.counterAxisSpacingVariable) {
+          const cssVarName = figmaVariableToCSSVariable(layout.counterAxisSpacingVariable);
+          properties.push(`row-gap: var(${cssVarName})`);
+        } else {
+          properties.push(`row-gap: ${layout.counterAxisSpacing}px`);
+        }
+      } else {
+        // Vertical: itemSpacing = row-gap, counterAxisSpacing = column-gap
+        if (layout.itemSpacingVariable) {
+          const cssVarName = figmaVariableToCSSVariable(layout.itemSpacingVariable);
+          properties.push(`row-gap: var(${cssVarName})`);
+        } else {
+          properties.push(`row-gap: ${layout.itemSpacing}px`);
+        }
+        if (layout.counterAxisSpacingVariable) {
+          const cssVarName = figmaVariableToCSSVariable(layout.counterAxisSpacingVariable);
+          properties.push(`column-gap: var(${cssVarName})`);
+        } else {
+          properties.push(`column-gap: ${layout.counterAxisSpacing}px`);
+        }
+      }
+    } else if (layout.itemSpacing !== undefined && !skipGapForSpaceBetween) {
+      // Single gap property (non-wrap mode or no counter axis spacing)
       if (layout.itemSpacingVariable) {
         const cssVarName = figmaVariableToCSSVariable(layout.itemSpacingVariable);
         properties.push(`gap: var(${cssVarName})`);
       } else {
         properties.push(`gap: ${layout.itemSpacing}px`);
       }
+    }
+    
+    // Add align-content for wrapped layouts
+    if (isWrapping && layout.counterAxisAlignContent) {
+      if (layout.counterAxisAlignContent === "SPACE_BETWEEN") {
+        properties.push(`align-content: space-between`);
+      }
+      // AUTO doesn't need explicit property (default behavior)
     }
 
     if (layout.primaryAxisAlignItems) {

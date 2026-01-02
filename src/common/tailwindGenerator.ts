@@ -899,9 +899,76 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
     }
   }
 
+  // Min/Max width classes
+  if (layout.minWidth !== undefined && layout.minWidth !== null) {
+    if (layout.minWidthVariable) {
+      variableMap[layout.minWidthVariable] = `${layout.minWidth}px`;
+      const spacingValue = extractSpacingValue(layout.minWidthVariable);
+      if (spacingValue) {
+        classes.push(`min-w-${spacingValue}`);
+      } else {
+        const tailwindVarName = figmaVariableToTailwindClass(layout.minWidthVariable);
+        classes.push(`min-w-[var(--${tailwindVarName})]`);
+      }
+    } else {
+      classes.push(`min-w-[${layout.minWidth}px]`);
+    }
+  }
+
+  if (layout.maxWidth !== undefined && layout.maxWidth !== null) {
+    if (layout.maxWidthVariable) {
+      variableMap[layout.maxWidthVariable] = `${layout.maxWidth}px`;
+      const spacingValue = extractSpacingValue(layout.maxWidthVariable);
+      if (spacingValue) {
+        classes.push(`max-w-${spacingValue}`);
+      } else {
+        const tailwindVarName = figmaVariableToTailwindClass(layout.maxWidthVariable);
+        classes.push(`max-w-[var(--${tailwindVarName})]`);
+      }
+    } else {
+      classes.push(`max-w-[${layout.maxWidth}px]`);
+    }
+  }
+
+  // Min/Max height classes
+  if (layout.minHeight !== undefined && layout.minHeight !== null) {
+    if (layout.minHeightVariable) {
+      variableMap[layout.minHeightVariable] = `${layout.minHeight}px`;
+      const spacingValue = extractSpacingValue(layout.minHeightVariable);
+      if (spacingValue) {
+        classes.push(`min-h-${spacingValue}`);
+      } else {
+        const tailwindVarName = figmaVariableToTailwindClass(layout.minHeightVariable);
+        classes.push(`min-h-[var(--${tailwindVarName})]`);
+      }
+    } else {
+      classes.push(`min-h-[${layout.minHeight}px]`);
+    }
+  }
+
+  if (layout.maxHeight !== undefined && layout.maxHeight !== null) {
+    if (layout.maxHeightVariable) {
+      variableMap[layout.maxHeightVariable] = `${layout.maxHeight}px`;
+      const spacingValue = extractSpacingValue(layout.maxHeightVariable);
+      if (spacingValue) {
+        classes.push(`max-h-${spacingValue}`);
+      } else {
+        const tailwindVarName = figmaVariableToTailwindClass(layout.maxHeightVariable);
+        classes.push(`max-h-[var(--${tailwindVarName})]`);
+      }
+    } else {
+      classes.push(`max-h-[${layout.maxHeight}px]`);
+    }
+  }
+
   if (layout.layoutMode) {
     classes.push("flex");
     classes.push(layout.layoutMode === "HORIZONTAL" ? "flex-row" : "flex-col");
+
+    // Add flex-wrap classes
+    if (layout.layoutWrap === "WRAP") {
+      classes.push("flex-wrap");
+    }
 
     // Padding
     if (layout.paddingLeft !== undefined || layout.paddingRight !== undefined || 
@@ -1011,21 +1078,79 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
     // However, when using SPACE_BETWEEN alignment, justify-between handles spacing automatically,
     // so we skip the gap class to avoid double spacing.
     // 
-    // Always store the variable if it exists (for consistency with CSS output),
-    // even if we skip the gap class.
+    // Always store the variables if they exist (for consistency with CSS output).
     if (layout.itemSpacingVariable) {
-      // Always store the variable value in variableMap (for consistency with CSS)
       variableMap[layout.itemSpacingVariable] = `${layout.itemSpacing}px`;
     }
+    if (layout.counterAxisSpacingVariable && layout.counterAxisSpacing !== undefined) {
+      variableMap[layout.counterAxisSpacingVariable] = `${layout.counterAxisSpacing}px`;
+    }
     
-    // Only add gap class if not using SPACE_BETWEEN alignment
-    // SPACE_BETWEEN uses justify-between which handles spacing automatically
-    if (layout.itemSpacing !== undefined && 
-        layout.primaryAxisAlignItems !== "SPACE_BETWEEN" && 
-        layout.counterAxisAlignItems !== "SPACE_BETWEEN") {
+    const isHorizontal = layout.layoutMode === "HORIZONTAL";
+    const hasCounterAxisSpacing = layout.counterAxisSpacing !== undefined && layout.counterAxisSpacing !== null;
+    const isWrapping = layout.layoutWrap === "WRAP";
+    const skipGapForSpaceBetween = layout.primaryAxisAlignItems === "SPACE_BETWEEN" || layout.counterAxisAlignItems === "SPACE_BETWEEN";
+    
+    // Gap mapping for common values
+    const gapMap: { [key: number]: string } = {
+      4: "1", 8: "2", 12: "3", 16: "4", 20: "5", 24: "6",
+    };
+    
+    if (isWrapping && hasCounterAxisSpacing && layout.itemSpacing !== undefined && !skipGapForSpaceBetween) {
+      // Separate gap-x and gap-y classes for wrap mode
+      if (isHorizontal) {
+        // itemSpacing = gap-x, counterAxisSpacing = gap-y
+        if (layout.itemSpacingVariable) {
+          const spacingValue = extractSpacingValue(layout.itemSpacingVariable);
+          if (spacingValue) {
+            classes.push(`gap-x-${spacingValue}`);
+          } else {
+            const tailwindVarName = figmaVariableToTailwindClass(layout.itemSpacingVariable);
+            classes.push(`gap-x-[var(--${tailwindVarName})]`);
+          }
+        } else if (layout.itemSpacing > 0) {
+          classes.push(gapMap[layout.itemSpacing] ? `gap-x-${gapMap[layout.itemSpacing]}` : `gap-x-[${layout.itemSpacing}px]`);
+        }
+        if (layout.counterAxisSpacingVariable) {
+          const spacingValue = extractSpacingValue(layout.counterAxisSpacingVariable);
+          if (spacingValue) {
+            classes.push(`gap-y-${spacingValue}`);
+          } else {
+            const tailwindVarName = figmaVariableToTailwindClass(layout.counterAxisSpacingVariable);
+            classes.push(`gap-y-[var(--${tailwindVarName})]`);
+          }
+        } else if (layout.counterAxisSpacing > 0) {
+          classes.push(gapMap[layout.counterAxisSpacing] ? `gap-y-${gapMap[layout.counterAxisSpacing]}` : `gap-y-[${layout.counterAxisSpacing}px]`);
+        }
+      } else {
+        // Vertical: itemSpacing = gap-y, counterAxisSpacing = gap-x
+        if (layout.itemSpacingVariable) {
+          const spacingValue = extractSpacingValue(layout.itemSpacingVariable);
+          if (spacingValue) {
+            classes.push(`gap-y-${spacingValue}`);
+          } else {
+            const tailwindVarName = figmaVariableToTailwindClass(layout.itemSpacingVariable);
+            classes.push(`gap-y-[var(--${tailwindVarName})]`);
+          }
+        } else if (layout.itemSpacing > 0) {
+          classes.push(gapMap[layout.itemSpacing] ? `gap-y-${gapMap[layout.itemSpacing]}` : `gap-y-[${layout.itemSpacing}px]`);
+        }
+        if (layout.counterAxisSpacingVariable) {
+          const spacingValue = extractSpacingValue(layout.counterAxisSpacingVariable);
+          if (spacingValue) {
+            classes.push(`gap-x-${spacingValue}`);
+          } else {
+            const tailwindVarName = figmaVariableToTailwindClass(layout.counterAxisSpacingVariable);
+            classes.push(`gap-x-[var(--${tailwindVarName})]`);
+          }
+        } else if (layout.counterAxisSpacing > 0) {
+          classes.push(gapMap[layout.counterAxisSpacing] ? `gap-x-${gapMap[layout.counterAxisSpacing]}` : `gap-x-[${layout.counterAxisSpacing}px]`);
+        }
+      }
+    } else if (layout.itemSpacing !== undefined && !skipGapForSpaceBetween) {
+      // Single gap class (non-wrap mode or no counter axis spacing)
       if (layout.itemSpacingVariable) {
         const spacingValue = extractSpacingValue(layout.itemSpacingVariable);
-        
         if (spacingValue) {
           classes.push(`gap-${spacingValue}`);
         } else {
@@ -1033,16 +1158,13 @@ export function layoutToTailwind(layout: any, variableMap: VariableMap, position
           classes.push(`gap-[var(--${tailwindVarName})]`);
         }
       } else if (layout.itemSpacing > 0) {
-        const gapMap: { [key: number]: string } = {
-          4: "gap-1",
-          8: "gap-2",
-          12: "gap-3",
-          16: "gap-4",
-          20: "gap-5",
-          24: "gap-6",
-        };
-        classes.push(gapMap[layout.itemSpacing] || `gap-[${layout.itemSpacing}px]`);
+        classes.push(gapMap[layout.itemSpacing] ? `gap-${gapMap[layout.itemSpacing]}` : `gap-[${layout.itemSpacing}px]`);
       }
+    }
+    
+    // Add content-* classes for wrapped layouts
+    if (isWrapping && layout.counterAxisAlignContent === "SPACE_BETWEEN") {
+      classes.push("content-between");
     }
 
     // Alignment

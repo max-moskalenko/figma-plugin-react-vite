@@ -250,6 +250,7 @@ export function ClassSelectionModal({
     // Track which variant context we're in (for proper child element assignment)
     let currentVariantContext: VariantDOMStructure | null = null;
     
+    
     while ((match = elementRegex.exec(tailwindSheet)) !== null) {
       const tagName = match[1];
       const attributes = match[2];
@@ -277,6 +278,10 @@ export function ClassSelectionModal({
         elementName = allClasses[0];
         classes = allClasses.slice(1);
       }
+      
+      // Filter out zero-value classes (like rounded-[0px], p-[0px]) to match skip zeros filtering
+      classes = classes.filter(cls => !/^[\w-]+\[0(px)?(_0(px)?)*\]$/.test(cls));
+      
       
       // Check if this element name matches a variant (from the kebab-case map)
       const matchedVariantName = variantNameMap.get(elementName);
@@ -312,6 +317,7 @@ export function ClassSelectionModal({
         }
       }
     }
+    
     
     return { 
       variants: variantStructures, 
@@ -349,45 +355,61 @@ export function ClassSelectionModal({
     return variant.childElementsHierarchy;
   }, [selectedVariant, variants, allChildElements]);
 
+  // Helper: Find which variant an element at a given index belongs to
+  // by walking backwards to find the nearest depth-0 (variant root) element
+  const getVariantForElementIndex = (index: number): VariantDOMStructure | null => {
+    if (index < 0 || index >= currentChildElements.length) return null;
+    
+    // Walk backwards to find the variant root (depth 0)
+    for (let i = index; i >= 0; i--) {
+      const elem = currentChildElements[i];
+      if (elem.depth === 0) {
+        // Found a variant root - find matching variant by elementName
+        const variant = variants.find(v => v.elementName === elem.normalizedName);
+        return variant || null;
+      }
+    }
+    return null;
+  };
+
   // Get class counts per element (considering variant filter)
-  // Uses extractedClasses.domElements (from plugin's RAW-based classToDOMMap) as single source of truth
-  // This ensures icons and their children (like Vector) are always included
+  // Always shows variant-specific counts - multi-select only affects selection behavior, not counts
   const elementClassCounts = useMemo(() => {
     const counts = new Map<string, number>();
     
     if (selectedVariant) {
-      // Count classes for the selected variant using RAW-based hierarchy
+      // Specific variant selected from dropdown - count that variant's classes
       const variant = variants.find(v => v.variantName === selectedVariant);
       if (variant) {
-        // Get all element names in this variant (from RAW hierarchy)
-        const variantElements = new Set<string>();
-        if (variant.elementName) {
-          variantElements.add(variant.elementName);
+        if (variant.elementName && variant.variantClasses.length > 0) {
+          counts.set(variant.elementName, variant.variantClasses.length);
         }
-        variant.childElementsHierarchy.forEach(elem => {
-          variantElements.add(elem.normalizedName);
-        });
-        
-        // Count classes per element from extractedClasses.domElements (plugin's mapping)
-        extractedClasses.forEach(cls => {
-          cls.domElements.forEach(el => {
-            if (variantElements.has(el)) {
-              counts.set(el, (counts.get(el) || 0) + 1);
-            }
-          });
+        variant.childElements.forEach((elementClasses, elementName) => {
+          counts.set(elementName, elementClasses.length);
         });
       }
     } else {
-      // Count from extractedClasses.domElements for all elements (plugin's mapping)
-      extractedClasses.forEach(cls => {
-        cls.domElements.forEach(el => {
-          counts.set(el, (counts.get(el) || 0) + 1);
-        });
+      // All Variants: count per-element in each variant's context
+      // Each DOM element in the list belongs to a specific variant, so count that variant's classes
+      currentChildElements.forEach((elem, index) => {
+        // Find which variant this element belongs to
+        const elementVariant = getVariantForElementIndex(index);
+        if (elementVariant) {
+          // Get count for this specific element in this specific variant
+          if (elem.normalizedName === elementVariant.elementName) {
+            // It's the variant root
+            counts.set(`${index}:${elem.normalizedName}`, elementVariant.variantClasses.length);
+          } else {
+            // It's a child element
+            const elementClasses = elementVariant.childElements.get(elem.normalizedName);
+            counts.set(`${index}:${elem.normalizedName}`, elementClasses?.length || 0);
+          }
+        }
       });
     }
     
     return counts;
-  }, [selectedVariant, variants, extractedClasses]);
+  }, [selectedVariant, variants, currentChildElements]);
 
   // Helper: Get parent hierarchy path for an element at a given index
   const getParentPath = (index: number): string => {
@@ -444,7 +466,7 @@ export function ClassSelectionModal({
   }, [selectedDOMElement, selectedDOMElementIndex, multiSelectSameElements, currentChildElements]);
 
   // Filter classes based on variant and DOM element selection
-  // Uses extractedClasses.domElements (from plugin's RAW-based mapping) as single source of truth
+  // Uses variant's own class data (variantClasses + childElements) when variant is selected
   const filteredClasses = useMemo(() => {
     let classes = extractedClasses;
     
@@ -452,40 +474,92 @@ export function ClassSelectionModal({
     if (selectedVariant) {
       const variant = variants.find(v => v.variantName === selectedVariant);
       if (variant) {
-        // Get all element names in this variant (from RAW hierarchy)
-        const variantElements = new Set<string>();
-        if (variant.elementName) {
-          variantElements.add(variant.elementName);
-        }
-        variant.childElementsHierarchy.forEach(elem => {
-          variantElements.add(elem.normalizedName);
+        
+        // Build a set of ALL classes that exist in THIS variant
+        // This includes variant root classes AND all child element classes
+        const variantClassSet = new Set<string>();
+        
+        // Add variant root classes
+        variant.variantClasses.forEach(cls => variantClassSet.add(cls));
+        
+        // Add all child element classes
+        variant.childElements.forEach((elementClasses, elementName) => {
+          elementClasses.forEach(cls => variantClassSet.add(cls));
         });
         
-        // Filter classes to those that belong to elements in this variant (using domElements from plugin)
-        classes = classes.filter(c => {
-          for (const el of c.domElements) {
-            if (variantElements.has(el)) return true;
-          }
-          return false;
-        });
+        
+        // Filter to only classes that actually exist in this variant
+        classes = classes.filter(c => variantClassSet.has(c.className));
       }
     }
     
     // Then filter by DOM element within that variant
     if (selectedDOMElementsForFiltering) {
-      // Filter to specific element(s) - works for both variant-selected and all-variants
-      classes = classes.filter(c => {
-        // Check if the class is used by any of the selected elements (using domElements from plugin)
-        for (const elemName of selectedDOMElementsForFiltering) {
-          if (c.domElements.includes(elemName)) return true;
+      if (selectedVariant) {
+        // Use variant's own class data for filtering within a variant
+        const variant = variants.find(v => v.variantName === selectedVariant);
+        if (variant) {
+          // Build set of classes for selected elements within THIS variant
+          const selectedElementClasses = new Set<string>();
+          
+          for (const elemName of selectedDOMElementsForFiltering) {
+            // Check variant root
+            if (elemName === variant.elementName) {
+              variant.variantClasses.forEach(cls => selectedElementClasses.add(cls));
+            }
+            // Check child elements
+            const elementClasses = variant.childElements.get(elemName);
+            if (elementClasses) {
+              elementClasses.forEach(cls => selectedElementClasses.add(cls));
+            }
+          }
+          
+          
+          classes = classes.filter(c => selectedElementClasses.has(c.className));
         }
-        return false;
-      });
+      } else {
+        // All variants mode
+        if (!multiSelectSameElements && selectedDOMElementIndex !== null) {
+          // SINGLE-SELECT mode in All Variants - show only classes from the specific clicked element
+          // Find which variant the clicked element belongs to
+          const elementVariant = getVariantForElementIndex(selectedDOMElementIndex);
+          
+          
+          if (elementVariant) {
+            // Get classes for this specific element from this specific variant
+            const specificElementClasses = new Set<string>();
+            
+            for (const elemName of selectedDOMElementsForFiltering) {
+              // Check if it's the variant root
+              if (elemName === elementVariant.elementName) {
+                elementVariant.variantClasses.forEach(cls => specificElementClasses.add(cls));
+              }
+              // Check child elements
+              const elementClasses = elementVariant.childElements.get(elemName);
+              if (elementClasses) {
+                elementClasses.forEach(cls => specificElementClasses.add(cls));
+              }
+            }
+            
+            
+            classes = classes.filter(c => specificElementClasses.has(c.className));
+          }
+        } else {
+          // MULTI-SELECT mode - use global domElements from plugin (all classes with matching element names)
+          classes = classes.filter(c => {
+            for (const elemName of selectedDOMElementsForFiltering) {
+              if (c.domElements.includes(elemName)) return true;
+            }
+            return false;
+          });
+          
+        }
+      }
     }
     
     // Filter by search term
     return filterClasses(classes, searchTerm);
-  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElementsForFiltering, variants]);
+  }, [extractedClasses, searchTerm, selectedVariant, selectedDOMElementsForFiltering, variants, multiSelectSameElements, selectedDOMElementIndex, currentChildElements]);
 
   // Group classes by category
   const groupedClasses = useMemo(() => {
@@ -698,7 +772,11 @@ export function ClassSelectionModal({
               // Check if element should be visible based on parent collapse state
               if (!isElementVisible(elem, index)) return null;
               
-              const count = elementClassCounts.get(elem.normalizedName) || 0;
+              // Get count: in All Variants mode, use index-based key; in specific variant mode, use element name
+              const countKey = !selectedVariant 
+                ? `${index}:${elem.normalizedName}` 
+                : elem.normalizedName;
+              const count = elementClassCounts.get(countKey) || 0;
               const isCollapsed = collapsedDOMElements.has(index);
               const elementHasChildren = hasChildren(elem, index);
               const isRoot = elem.depth === 0;

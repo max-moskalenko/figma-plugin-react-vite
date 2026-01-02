@@ -11,6 +11,7 @@ import { CVATool, CVAProvider } from "@ui/components/cva";
 
 type OutputFormat = "css" | "tailwind" | "raw";
 type ExtractorTab = "dom-styles" | "component-properties";
+type DOMStylesSubTab = "settings" | "used-vars";
 
 function App() {
   // Navigation state
@@ -25,6 +26,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [copiedProperties, setCopiedProperties] = useState(false);
   const [activeExtractorTab, setActiveExtractorTab] = useState<ExtractorTab>("dom-styles");
+  const [activeDOMStylesSubTab, setActiveDOMStylesSubTab] = useState<DOMStylesSubTab>("settings");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("css");
   const [annotationsEnabled, setAnnotationsEnabled] = useState(true);
   const [annotationFormat, setAnnotationFormat] = useState<AnnotationFormat>("html");
@@ -704,135 +706,154 @@ function App() {
           
           {/* Show format toggle only on DOM & Styles tab */}
           {activeExtractorTab === "dom-styles" && (
-            <div className="format-toggle">
-              <p className="format-toggle-label">Output Format</p>
-              <div className="format-options format-options-horizontal">
-                <label className={`format-option ${outputFormat === "css" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="css"
-                    checked={outputFormat === "css"}
-                    onChange={() => setOutputFormat("css")}
-                    disabled={loading}
-                  />
-                  <span>CSS</span>
-                </label>
-                <label className={`format-option ${outputFormat === "tailwind" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="tailwind"
-                    checked={outputFormat === "tailwind"}
-                    onChange={() => setOutputFormat("tailwind")}
-                    disabled={loading}
-                  />
-                  <span>TW</span>
-                </label>
-                <label className={`format-option ${outputFormat === "raw" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
-                  <input
-                    type="radio"
-                    name="format"
-                    value="raw"
-                    checked={outputFormat === "raw"}
-                    onChange={() => setOutputFormat("raw")}
-                    disabled={loading}
-                  />
-                  <span>Raw</span>
-                </label>
-              </div>
-            </div>
-          )}
-          
-          {/* Show options and variables only on DOM & Styles tab */}
-          {activeExtractorTab === "dom-styles" && (
             <>
-              <div className="options-row">
-                <div className="option-item">
-                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+              <div className="format-toggle">
+                <p className="format-toggle-label">Output Format</p>
+                <div className="format-options format-options-horizontal">
+                  <label className={`format-option ${outputFormat === "css" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
                     <input
-                      type="checkbox"
-                      checked={annotationsEnabled}
-                      onChange={(e) => setAnnotationsEnabled(e.target.checked)}
+                      type="radio"
+                      name="format"
+                      value="css"
+                      checked={outputFormat === "css"}
+                      onChange={() => setOutputFormat("css")}
                       disabled={loading}
                     />
-                    <span className="toggle-slider"></span>
+                    <span>CSS</span>
                   </label>
-                  <span className="toggle-label">Annotations</span>
-                  {annotationsEnabled && (
-                    <select
-                      value={annotationFormat}
-                      onChange={(e) => setAnnotationFormat(e.target.value as AnnotationFormat)}
-                      disabled={loading}
-                      className="inline-select"
-                    >
-                      <option value="html">HTML</option>
-                      <option value="tsx">TSX</option>
-                    </select>
-                  )}
-                </div>
-                <div className="option-item">
-                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                  <label className={`format-option ${outputFormat === "tailwind" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
                     <input
-                      type="checkbox"
-                      checked={prettifyEnabled}
-                      onChange={(e) => setPrettifyEnabled(e.target.checked)}
+                      type="radio"
+                      name="format"
+                      value="tailwind"
+                      checked={outputFormat === "tailwind"}
+                      onChange={() => setOutputFormat("tailwind")}
                       disabled={loading}
                     />
-                    <span className="toggle-slider"></span>
+                    <span>TW</span>
                   </label>
-                  <span className="toggle-label">Prettify</span>
-                </div>
-                <div className="option-item">
-                  <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                  <label className={`format-option ${outputFormat === "raw" ? "format-option-checked" : ""} ${loading ? "format-option-disabled" : ""}`}>
                     <input
-                      type="checkbox"
-                      checked={excludeZeroValues}
-                      onChange={(e) => setExcludeZeroValues(e.target.checked)}
+                      type="radio"
+                      name="format"
+                      value="raw"
+                      checked={outputFormat === "raw"}
+                      onChange={() => setOutputFormat("raw")}
                       disabled={loading}
                     />
-                    <span className="toggle-slider"></span>
+                    <span>Raw</span>
                   </label>
-                  <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
-                </div>
-                
-                {/* Icon Export Settings */}
-                <div className="icon-export-option">
-                  <label className="option-label">Icon export</label>
-                  <select
-                    value={iconExportMode}
-                    onChange={(e) => setIconExportMode(e.target.value as IconExportMode)}
-                    className="option-select"
-                    disabled={loading}
-                    title="How to export detected icon components"
-                  >
-                    <option value="none">None (default)</option>
-                    <option value="npm-package">NPM Package Import</option>
-                  </select>
-                  {iconExportMode === 'npm-package' && (
-                    <div className="sub-option">
-                      <input
-                        type="text"
-                        value={iconPackageName}
-                        onChange={(e) => setIconPackageName(e.target.value)}
-                        placeholder="@phosphor-icons/react"
-                        className="text-input"
-                        disabled={loading}
-                        title="NPM package name for icon imports"
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
               
-              {(() => {
+              {/* Sub-tabs for Settings and Used Vars */}
+              <div className="extractor-sub-tabs">
+                <button
+                  className={`extractor-sub-tab ${activeDOMStylesSubTab === "settings" ? "active" : ""}`}
+                  onClick={() => setActiveDOMStylesSubTab("settings")}
+                  disabled={loading}
+                >
+                  Settings
+                </button>
+                <button
+                  className={`extractor-sub-tab ${activeDOMStylesSubTab === "used-vars" ? "active" : ""}`}
+                  onClick={() => setActiveDOMStylesSubTab("used-vars")}
+                  disabled={loading}
+                >
+                  Used Vars {(() => {
+                    const count = getAllVariablesWithUsage().length;
+                    return count > 0 ? `(${count})` : '';
+                  })()}
+                </button>
+              </div>
+              
+              {/* Settings sub-tab content */}
+              {activeDOMStylesSubTab === "settings" && (
+                <div className="options-row">
+                  <div className="option-item">
+                    <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={annotationsEnabled}
+                        onChange={(e) => setAnnotationsEnabled(e.target.checked)}
+                        disabled={loading}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    <span className="toggle-label">Annotations</span>
+                    {annotationsEnabled && (
+                      <select
+                        value={annotationFormat}
+                        onChange={(e) => setAnnotationFormat(e.target.value as AnnotationFormat)}
+                        disabled={loading}
+                        className="inline-select"
+                      >
+                        <option value="html">HTML</option>
+                        <option value="tsx">TSX</option>
+                      </select>
+                    )}
+                  </div>
+                  <div className="option-item">
+                    <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={prettifyEnabled}
+                        onChange={(e) => setPrettifyEnabled(e.target.checked)}
+                        disabled={loading}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    <span className="toggle-label">Prettify</span>
+                  </div>
+                  <div className="option-item">
+                    <label className={`toggle-switch ${loading ? "toggle-disabled" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={excludeZeroValues}
+                        onChange={(e) => setExcludeZeroValues(e.target.checked)}
+                        disabled={loading}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    <span className="toggle-label" title="Filter out classes like rounded-[0px], p-0, m-0 (affects only CSS and TW outputs)">Skip zeros (CSS/TW)</span>
+                  </div>
+                  
+                  {/* Icon Export Settings */}
+                  <div className="icon-export-option">
+                    <label className="option-label">Icon export</label>
+                    <select
+                      value={iconExportMode}
+                      onChange={(e) => setIconExportMode(e.target.value as IconExportMode)}
+                      className="option-select"
+                      disabled={loading}
+                      title="How to export detected icon components"
+                    >
+                      <option value="none">None (default)</option>
+                      <option value="npm-package">NPM Package Import</option>
+                    </select>
+                    {iconExportMode === 'npm-package' && (
+                      <div className="sub-option">
+                        <input
+                          type="text"
+                          value={iconPackageName}
+                          onChange={(e) => setIconPackageName(e.target.value)}
+                          placeholder="@phosphor-icons/react"
+                          className="text-input"
+                          disabled={loading}
+                          title="NPM package name for icon imports"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Used Vars sub-tab content */}
+              {activeDOMStylesSubTab === "used-vars" && (() => {
                 const allVars = getAllVariablesWithUsage();
                 const groupedVars = categorizeVariables(allVars);
-                return allVars.length > 0 && (
+                return allVars.length > 0 ? (
                   <div className="variables-list">
-                    <p className="variables-title">
-                      Used vars <span className="variables-count">({allVars.length})</span>
-                    </p>
                     <div className="variables-wrapper">
                       {groupedVars.map((group) => (
                         <div key={group.category} className="variable-group">
@@ -857,6 +878,10 @@ function App() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                ) : (
+                  <div className="no-variables-message">
+                    <p>No variables used yet</p>
                   </div>
                 );
               })()}

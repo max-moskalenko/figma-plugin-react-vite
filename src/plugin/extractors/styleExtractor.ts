@@ -738,9 +738,68 @@ function extractLayout(node: SceneNode, variables: readonly VariableCollection[]
     }
   }
 
+  // Extract min/max width/height properties (from DimensionAndPositionMixin)
+  // These are number | null in Figma API
+  if ("minWidth" in node && (node as any).minWidth !== null) {
+    const minWidthValue = (node as any).minWidth;
+    if (node.boundVariables?.minWidth) {
+      const minWidthVar = resolveVariable(node, "minWidth", minWidthValue, variables);
+      layout.minWidth = minWidthVar.value;
+      if (minWidthVar.isVariable) {
+        layout.minWidthVariable = minWidthVar.name;
+      }
+    } else {
+      layout.minWidth = minWidthValue;
+    }
+  }
+
+  if ("maxWidth" in node && (node as any).maxWidth !== null) {
+    const maxWidthValue = (node as any).maxWidth;
+    if (node.boundVariables?.maxWidth) {
+      const maxWidthVar = resolveVariable(node, "maxWidth", maxWidthValue, variables);
+      layout.maxWidth = maxWidthVar.value;
+      if (maxWidthVar.isVariable) {
+        layout.maxWidthVariable = maxWidthVar.name;
+      }
+    } else {
+      layout.maxWidth = maxWidthValue;
+    }
+  }
+
+  if ("minHeight" in node && (node as any).minHeight !== null) {
+    const minHeightValue = (node as any).minHeight;
+    if (node.boundVariables?.minHeight) {
+      const minHeightVar = resolveVariable(node, "minHeight", minHeightValue, variables);
+      layout.minHeight = minHeightVar.value;
+      if (minHeightVar.isVariable) {
+        layout.minHeightVariable = minHeightVar.name;
+      }
+    } else {
+      layout.minHeight = minHeightValue;
+    }
+  }
+
+  if ("maxHeight" in node && (node as any).maxHeight !== null) {
+    const maxHeightValue = (node as any).maxHeight;
+    if (node.boundVariables?.maxHeight) {
+      const maxHeightVar = resolveVariable(node, "maxHeight", maxHeightValue, variables);
+      layout.maxHeight = maxHeightVar.value;
+      if (maxHeightVar.isVariable) {
+        layout.maxHeightVariable = maxHeightVar.name;
+      }
+    } else {
+      layout.maxHeight = maxHeightValue;
+    }
+  }
+
   // Auto-layout properties
   if ("layoutMode" in node) {
     layout.layoutMode = node.layoutMode;
+    
+    // Extract layout wrap (NO_WRAP, WRAP)
+    if ("layoutWrap" in node) {
+      layout.layoutWrap = (node as any).layoutWrap;
+    }
     
     // Extract layout positioning (ABSOLUTE, AUTO)
     if ("layoutPositioning" in node) {
@@ -807,6 +866,26 @@ function extractLayout(node: SceneNode, variables: readonly VariableCollection[]
       }
     } else {
       layout.itemSpacing = node.itemSpacing;
+    }
+
+    // Extract counterAxisSpacing (row-gap for horizontal, column-gap for vertical)
+    // This is only relevant when layoutWrap is WRAP
+    if ("counterAxisSpacing" in node && (node as any).counterAxisSpacing !== null) {
+      const counterAxisSpacingValue = (node as any).counterAxisSpacing;
+      if (node.boundVariables?.counterAxisSpacing) {
+        const counterAxisSpacingVar = resolveVariable(node, "counterAxisSpacing", counterAxisSpacingValue, variables);
+        layout.counterAxisSpacing = counterAxisSpacingVar.value;
+        if (counterAxisSpacingVar.isVariable) {
+          layout.counterAxisSpacingVariable = counterAxisSpacingVar.name;
+        }
+      } else {
+        layout.counterAxisSpacing = counterAxisSpacingValue;
+      }
+    }
+
+    // Extract counterAxisAlignContent (for wrapped items)
+    if ("counterAxisAlignContent" in node) {
+      layout.counterAxisAlignContent = (node as any).counterAxisAlignContent;
     }
 
     layout.primaryAxisAlignItems = node.primaryAxisAlignItems;

@@ -793,16 +793,25 @@ export function useCVAState(): CVAState & CVAActions {
       // This is generated using the same logic as the Tailwind output
       let extractedClasses: ExtractedClass[];
       
+      // Helper to check if a class is a zero-value class (like rounded-[0px], p-[0px])
+      const isZeroValueClass = (className: string): boolean => {
+        // Match patterns like: rounded-[0px], p-[0px_0px_0px_0px], m-[0px], etc.
+        return /^[\w-]+\[0(px)?(_0(px)?)*\]$/.test(className);
+      };
+      
       if (result.classToDOMMap && Object.keys(result.classToDOMMap).length > 0) {
         // New approach: Use the pre-built mapping from the plugin
-        extractedClasses = Object.entries(result.classToDOMMap).map(([className, domElements], index) => ({
-          id: `class-${index}-${className}`,
-          className,
-          category: categorizeClass(className),
-          domElements,
-          isSelected: true,
-          isUsedInVariant: false,
-        }));
+        // Filter out zero-value classes to match the stylesheet filtering
+        extractedClasses = Object.entries(result.classToDOMMap)
+          .filter(([className]) => !isZeroValueClass(className))
+          .map(([className, domElements], index) => ({
+            id: `class-${index}-${className}`,
+            className,
+            category: categorizeClass(className),
+            domElements,
+            isSelected: true,
+            isUsedInVariant: false,
+          }));
       } else {
         // Fallback: Parse HTML (for backwards compatibility)
         const classesWithDOM = extractClassesWithDOMElements(

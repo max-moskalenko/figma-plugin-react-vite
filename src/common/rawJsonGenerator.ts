@@ -65,11 +65,16 @@ export function generateRawJSON(
     if (layout) {
       if (layout.widthVariable) usedVariables.add(layout.widthVariable);
       if (layout.heightVariable) usedVariables.add(layout.heightVariable);
+      if (layout.minWidthVariable) usedVariables.add(layout.minWidthVariable);
+      if (layout.maxWidthVariable) usedVariables.add(layout.maxWidthVariable);
+      if (layout.minHeightVariable) usedVariables.add(layout.minHeightVariable);
+      if (layout.maxHeightVariable) usedVariables.add(layout.maxHeightVariable);
       if (layout.paddingLeftVariable) usedVariables.add(layout.paddingLeftVariable);
       if (layout.paddingRightVariable) usedVariables.add(layout.paddingRightVariable);
       if (layout.paddingTopVariable) usedVariables.add(layout.paddingTopVariable);
       if (layout.paddingBottomVariable) usedVariables.add(layout.paddingBottomVariable);
       if (layout.itemSpacingVariable) usedVariables.add(layout.itemSpacingVariable);
+      if (layout.counterAxisSpacingVariable) usedVariables.add(layout.counterAxisSpacingVariable);
       if (layout.cornerRadiusVariable) usedVariables.add(layout.cornerRadiusVariable);
       if (layout.opacityVariable) usedVariables.add(layout.opacityVariable);
     }
