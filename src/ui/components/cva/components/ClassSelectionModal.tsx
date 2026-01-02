@@ -117,26 +117,11 @@ export function ClassSelectionModal({
     };
     
     // Build variant name to kebab-case map for matching Tailwind classes
-    const variantNameMap = new Map<string, string>(); // kebab-case -> original name
+    const variantNameQueue = new Map<string, string[]>(); // kebab-case -> queue of variant names (in order)
     
     // Extract variants - use componentProperties if available for complete list
     if (extractorResult.componentProperties && extractorResult.componentProperties.variants.length > 0) {
-      // Use componentProperties.variants to get ALL variants (even if user selected just one)
-      extractorResult.componentProperties.variants.forEach(variant => {
-        // Match sanitizeTagName normalization: remove special chars, then lowercase
-        const elementName = variant.variantName.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
-        variantStructures.push({
-          variantName: variant.variantName,
-          elementName,
-          variantClasses: [],
-          childElements: new Map(),
-          childElementsHierarchy: []
-        });
-        // Map: "typecheckboxstateunchecked" -> "Type=Checkbox, State=Unchecked"
-        variantNameMap.set(elementName, variant.variantName);
-      });
-      
-      // Get component set name if available
+      // Get component set name FIRST so we can use it for elementName
       if (rawNodes.length > 0) {
         if (rawNodes[0].type === "COMPONENT_SET") {
           compSetName = rawNodes[0].name;
@@ -145,6 +130,24 @@ export function ClassSelectionModal({
           compSetName = rawNodes[0].componentSetName;
         }
       }
+      
+      // Use componentProperties.variants to get ALL variants (even if user selected just one)
+      extractorResult.componentProperties.variants.forEach(variant => {
+        // For matching with classToDOMMap, use componentSetName (what becomes the tag in Tailwind output)
+        // If no componentSetName, fall back to variant name
+        const nameForMatching = compSetName || variant.variantName;
+        const elementName = nameForMatching.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+        variantStructures.push({
+          variantName: variant.variantName,
+          elementName,
+          variantClasses: [],
+          childElements: new Map(),
+          childElementsHierarchy: []
+        });
+        // Queue: "dropdownmenu.item" -> ["variant1", "variant2", ...]
+        if (!variantNameQueue.has(elementName)) variantNameQueue.set(elementName, []);
+        variantNameQueue.get(elementName)!.push(variant.variantName);
+      });
     } else if (rawNodes.length > 0) {
       // Fallback: parse from raw nodes if componentProperties not available
       const firstNode = rawNodes[0];
@@ -162,8 +165,9 @@ export function ClassSelectionModal({
         if (firstNode.children && Array.isArray(firstNode.children)) {
           firstNode.children.forEach((variantNode: any) => {
             if (variantNode.type === "COMPONENT") {
-              // Match sanitizeTagName normalization: remove special chars, then lowercase
-              const elementName = variantNode.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+              // For matching with classToDOMMap, use componentSetName (what becomes the tag in Tailwind output)
+              const nameForMatching = compSetName || variantNode.name;
+              const elementName = nameForMatching.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
               variantStructures.push({
                 variantName: variantNode.name,
                 elementName,
@@ -171,7 +175,8 @@ export function ClassSelectionModal({
                 childElements: new Map(),
                 childElementsHierarchy: []
               });
-              variantNameMap.set(elementName, variantNode.name);
+              if (!variantNameQueue.has(elementName)) variantNameQueue.set(elementName, []);
+              variantNameQueue.get(elementName)!.push(variantNode.name);
             }
           });
         }
@@ -181,8 +186,9 @@ export function ClassSelectionModal({
         // Multiple variants from the same component set
         rawNodes.forEach((node: any) => {
           if (node.type === "COMPONENT") {
-            // Match sanitizeTagName normalization: remove special chars, then lowercase
-            const elementName = node.name.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
+            // For matching with classToDOMMap, use componentSetName (what becomes the tag in Tailwind output)
+            const nameForMatching = compSetName || node.name;
+            const elementName = nameForMatching.replace(/[^a-zA-Z0-9_.-]/g, '').toLowerCase();
             variantStructures.push({
               variantName: node.name,
               elementName,
@@ -190,7 +196,8 @@ export function ClassSelectionModal({
               childElements: new Map(),
               childElementsHierarchy: []
             });
-            variantNameMap.set(elementName, node.name);
+            if (!variantNameQueue.has(elementName)) variantNameQueue.set(elementName, []);
+            variantNameQueue.get(elementName)!.push(node.name);
           }
         });
       }
@@ -206,7 +213,8 @@ export function ClassSelectionModal({
           childElements: new Map(),
           childElementsHierarchy: []
         });
-        variantNameMap.set(elementName, firstNode.name);
+        if (!variantNameQueue.has(elementName)) variantNameQueue.set(elementName, []);
+        variantNameQueue.get(elementName)!.push(firstNode.name);
       }
       // else: Instances, standalone components, etc. - no variant structures, use global classToDOMMap
     }
@@ -294,7 +302,8 @@ export function ClassSelectionModal({
     // Now map classes from Tailwind output to DOM elements
     // Parse element by element: <tagName data-name="..." className="...">
     // Use a more robust approach that handles multi-line attributes
-    const elementRegex = /<(\w+)([^>]*)>/g;
+    // Note: [\w.]+ captures dots in React component names (e.g., DropdownMenu.Item)
+    const elementRegex = /<([\w.]+)([^>]*)>/g;
     let match;
     
     // Track which variant context we're in (for proper child element assignment)
@@ -307,6 +316,7 @@ export function ClassSelectionModal({
     while ((match = elementRegex.exec(tailwindSheet)) !== null) {
       const tagName = match[1];
       const attributes = match[2];
+      
       
       // Extract className or class
       const classMatch = attributes.match(/(?:className|class)="([^"]+)"/);
@@ -361,9 +371,11 @@ export function ClassSelectionModal({
       parsedElementCount++;
       totalClassCount += classes.length;
       
-      // Check if this element name matches a variant (from the kebab-case map)
-      const matchedVariantName = variantNameMap.get(elementName);
+      // Check if this element name matches a variant (from the queue - pop in order)
+      const queue = variantNameQueue.get(elementName);
+      const matchedVariantName = queue && queue.length > 0 ? queue.shift() : null;
       const variant = matchedVariantName ? variantStructures.find(v => v.variantName === matchedVariantName) : null;
+      
       
       if (variant) {
         // This is a variant wrapper/root element
@@ -454,6 +466,7 @@ export function ClassSelectionModal({
   // Always shows variant-specific counts - multi-select only affects selection behavior, not counts
   const elementClassCounts = useMemo(() => {
     const counts = new Map<string, number>();
+    
     
     if (selectedVariant) {
       // Specific variant selected from dropdown - count that variant's classes

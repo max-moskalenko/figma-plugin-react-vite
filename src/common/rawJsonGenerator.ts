@@ -1,3 +1,14 @@
+/**
+ * @file RAW JSON Generator
+ * @module common/rawJsonGenerator
+ * 
+ * Generates prettified JSON representation of extracted Figma nodes.
+ * Used for debugging and as the single source of truth for DOM mapping.
+ * 
+ * Key exports:
+ * - generateRawJSON() - Main generation function
+ */
+
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
 import { IconExportSettings } from "@common/networkSides";

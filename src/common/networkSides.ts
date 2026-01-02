@@ -1,3 +1,16 @@
+/**
+ * @file Network Communication Definitions
+ * @module common/networkSides
+ * 
+ * Defines the communication channels between Plugin and UI sides.
+ * Uses monorepo-networker for type-safe message passing.
+ * 
+ * Key exports:
+ * - UI - UI side channel definition
+ * - PLUGIN - Plugin side channel definition
+ * - MultiFormatExtractionResult - Main extraction result interface
+ */
+
 import { Networker } from "monorepo-networker";
 
 export const UI = Networker.createSide("UI-side").listens<{

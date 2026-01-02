@@ -1,3 +1,20 @@
+/**
+ * @file Tailwind Generator
+ * @module common/tailwindGenerator
+ * 
+ * Converts extracted Figma styles to Tailwind utility classes.
+ * Handles variable remapping (e.g., spacing-7 → p-7) and semantic class generation.
+ * 
+ * Key exports:
+ * - fillsToTailwind() - Background and text color classes
+ * - strokesToTailwind() - Border classes
+ * - typographyToTailwind() - Font and text classes
+ * - layoutToTailwind() - Flex, sizing, and spacing classes
+ * - effectsToTailwind() - Shadow and blur classes
+ * - buildClassToDOMMap() - Class-to-element mapping
+ * - figmaVariableToTailwindClass() - Variable name conversion
+ */
+
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
 import { VariableMap, figmaVariableToCSSVariable } from "./cssGenerator";
 
@@ -1523,8 +1540,10 @@ export function buildClassToDOMMap(
   function processNode(node: any, depth: number = 0): void {
     if (!node || !node.name) return;
     
-    // Get element name - use original name for display, normalized for consistency
-    const elementName = normalizeElementName(node.name);
+    // Get element name - for variant root components, use componentSetName to match Tailwind DOM output
+    // For other nodes, use node.name
+    const nameForMapping = node.componentSetName || node.name;
+    const elementName = normalizeElementName(nameForMapping);
     
     // Generate Tailwind classes for this node if it has styles
     if (node.styles) {

@@ -1,3 +1,21 @@
+/**
+ * @file Style Extractor
+ * @module plugin/extractors/styleExtractor
+ * 
+ * Extracts visual style properties from Figma nodes with variable resolution.
+ * Handles fills, strokes, effects, typography, and layout properties.
+ * 
+ * Key exports:
+ * - extractStyles() - Main style extraction function
+ * - getAllVariables() - Fetch all variable collections
+ * - extractComponentProperties() - Extract variant properties
+ * 
+ * Variable Resolution:
+ * - Checks node.boundVariables for property bindings
+ * - Resolves variable IDs to names via Figma API
+ * - Handles array bindings and per-side properties
+ */
+
 // SceneNode is a global type from Figma API
 
 export interface ExtractedStyles {

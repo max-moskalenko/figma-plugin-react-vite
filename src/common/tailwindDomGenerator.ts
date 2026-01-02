@@ -1,3 +1,20 @@
+/**
+ * @file Tailwind DOM Generator
+ * @module common/tailwindDomGenerator
+ * 
+ * Generates JSX output with Tailwind utility classes.
+ * Uses layer names as semantic tag names (dots preserved for React namespacing).
+ * 
+ * Key exports:
+ * - generateTailwindDOM() - Main generation function
+ * 
+ * Output format:
+ * <Button className="flex p-4 bg-fill-primary">
+ *   <Icon.Check className="w-4 h-4" />
+ *   <Label className="text-sm">Click</Label>
+ * </Button>
+ */
+
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";

@@ -1,4 +1,19 @@
 /**
+ * @file Component Traverser
+ * @module plugin/extractors/componentTraverser
+ * 
+ * Recursively traverses Figma nodes to build a tree structure.
+ * Captures node metadata, annotations, icon detection, and component set names.
+ * 
+ * Key exports:
+ * - traverseComponent() - Recursive node traversal
+ * - traverseSelection() - Process current selection
+ * - ExtractedNode - Tree node interface
+ * 
+ * Note: Style extraction is done separately in styleExtractor.ts
+ */
+
+/**
  * Icon metadata for detected icon components
  */
 export interface IconMetadata {

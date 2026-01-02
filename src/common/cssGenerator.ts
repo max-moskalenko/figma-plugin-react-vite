@@ -1,3 +1,19 @@
+/**
+ * @file CSS Generator
+ * @module common/cssGenerator
+ * 
+ * Converts extracted Figma styles to CSS properties with variable support.
+ * Generates inline CSS and CSS custom property definitions.
+ * 
+ * Key exports:
+ * - fillsToCSS() - Background colors and gradients
+ * - strokesToCSS() - Border properties
+ * - typographyToCSS() - Font properties
+ * - layoutToCSS() - Flexbox and sizing
+ * - effectsToCSS() - Shadows and blur
+ * - figmaVariableToCSSVariable() - Variable name conversion
+ */
+
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
 
 export interface CSSRule {

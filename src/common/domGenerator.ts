@@ -1,3 +1,19 @@
+/**
+ * @file DOM Generator (CSS Format)
+ * @module common/domGenerator
+ * 
+ * Generates HTML output with inline CSS styles.
+ * Uses layer names as semantic tag names (dots removed for HTML compatibility).
+ * 
+ * Key exports:
+ * - generateDOM() - Main generation function
+ * 
+ * Output format:
+ * <Button style="display: flex; padding: 16px;">
+ *   <Label style="font-size: 14px;">Click</Label>
+ * </Button>
+ */
+
 import { ExtractedNode } from "@plugin/extractors/componentTraverser";
 import { VariableMap, layoutToCSS, typographyToCSS, fillsToCSS, strokesToCSS, effectsToCSS, figmaVariableToCSSVariable } from "./cssGenerator";
 import { ExtractedStyles } from "@plugin/extractors/styleExtractor";
